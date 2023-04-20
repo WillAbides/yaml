@@ -40,9 +40,7 @@ type parser struct {
 
 func newParser(b []byte) *parser {
 	p := parser{}
-	if !yaml_parser_initialize(&p.parser) {
-		panic("failed to initialize YAML emitter")
-	}
+	yaml_parser_initialize(&p.parser)
 	if len(b) == 0 {
 		b = []byte{'\n'}
 	}
@@ -52,9 +50,7 @@ func newParser(b []byte) *parser {
 
 func newParserFromReader(r io.Reader) *parser {
 	p := parser{}
-	if !yaml_parser_initialize(&p.parser) {
-		panic("failed to initialize YAML emitter")
-	}
+	yaml_parser_initialize(&p.parser)
 	yaml_parser_set_input_reader(&p.parser, r)
 	return &p
 }

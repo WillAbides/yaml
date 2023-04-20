@@ -53,144 +53,155 @@ func newEncoderWithWriter(w io.Writer) *encoder {
 	return e
 }
 
-func (e *encoder) init() {
+func (e *encoder) init() error {
 	if e.doneInit {
-		return
+		return nil
 	}
 	if e.indent == 0 {
 		e.indent = 4
 	}
 	e.emitter.best_indent = e.indent
 	yaml_stream_start_event_initialize(&e.event, yaml_UTF8_ENCODING)
-	e.emit()
+	err := e.emit()
+	if err != nil {
+		return err
+	}
 	e.doneInit = true
+	return nil
 }
 
-func (e *encoder) finish() {
+func (e *encoder) finish() error {
 	e.emitter.open_ended = false
 	yaml_stream_end_event_initialize(&e.event)
-	e.emit()
+	return e.emit()
 }
 
 func (e *encoder) destroy() {
 	yaml_emitter_delete(&e.emitter)
 }
 
-func (e *encoder) emit() {
+func (e *encoder) emit() error {
 	// This will internally delete the e.event value.
-	e.must(yaml_emitter_emit(&e.emitter, &e.event))
-}
-
-func (e *encoder) must(ok bool) {
+	ok := yaml_emitter_emit(&e.emitter, &e.event)
 	if !ok {
-		msg := e.emitter.problem
-		if msg == "" {
-			msg = "unknown problem generating YAML content"
+		msg := "unknown problem generating YAML content"
+		if e.emitter.problem != "" {
+			msg = e.emitter.problem
 		}
-		failf("%s", msg)
+		var r error = yamlError{fmt.Errorf("yaml: " + msg)}
+		return r
 	}
+	return nil
 }
 
-func (e *encoder) marshalDoc(tag string, in reflect.Value) {
-	e.init()
+func (e *encoder) marshalDoc(tag string, in reflect.Value) error {
+	err := e.init()
+	if err != nil {
+		return err
+	}
 	var node *Node
 	if in.IsValid() {
 		node, _ = in.Interface().(*Node)
 	}
 	if node != nil && node.Kind == DocumentNode {
-		e.nodev(in)
-	} else {
-		yaml_document_start_event_initialize(&e.event, nil, nil, true)
-		e.emit()
-		e.marshal(tag, in)
-		yaml_document_end_event_initialize(&e.event, true)
-		e.emit()
+		return e.nodev(in)
 	}
+
+	yaml_document_start_event_initialize(&e.event, nil, nil, true)
+	err = e.emit()
+	if err != nil {
+		return err
+	}
+	err = e.marshal(tag, in)
+	if err != nil {
+		return err
+	}
+	yaml_document_end_event_initialize(&e.event, true)
+	return e.emit()
 }
 
-func (e *encoder) marshal(tag string, in reflect.Value) {
+func (e *encoder) marshal(tag string, in reflect.Value) error {
 	tag = shortTag(tag)
 	if !in.IsValid() || in.Kind() == reflect.Ptr && in.IsNil() {
-		e.nilv()
-		return
+		return e.nilv()
 	}
 	iface := in.Interface()
 	switch value := iface.(type) {
 	case *Node:
-		e.nodev(in)
-		return
+		return e.nodev(in)
 	case Node:
 		if !in.CanAddr() {
 			var n = reflect.New(in.Type()).Elem()
 			n.Set(in)
 			in = n
 		}
-		e.nodev(in.Addr())
-		return
+		return e.nodev(in.Addr())
 	case time.Time:
-		e.timev(tag, in)
-		return
+		return e.timev(tag, in)
 	case *time.Time:
-		e.timev(tag, in.Elem())
-		return
+		return e.timev(tag, in.Elem())
 	case time.Duration:
-		e.stringv(tag, reflect.ValueOf(value.String()))
-		return
+		return e.stringv(tag, reflect.ValueOf(value.String()))
 	case Marshaler:
 		v, err := value.MarshalYAML()
 		if err != nil {
-			fail(err)
+			return yamlError{err}
 		}
 		if v == nil {
-			e.nilv()
-			return
+			return e.nilv()
 		}
-		e.marshal(tag, reflect.ValueOf(v))
-		return
+		return e.marshal(tag, reflect.ValueOf(v))
 	case encoding.TextMarshaler:
 		text, err := value.MarshalText()
 		if err != nil {
-			fail(err)
+			return yamlError{err}
 		}
 		in = reflect.ValueOf(string(text))
 	case nil:
-		e.nilv()
-		return
+		return e.nilv()
 	}
 	switch in.Kind() {
 	case reflect.Interface:
-		e.marshal(tag, in.Elem())
+		return e.marshal(tag, in.Elem())
 	case reflect.Map:
-		e.mapv(tag, in)
+		return e.mapv(tag, in)
 	case reflect.Ptr:
-		e.marshal(tag, in.Elem())
+		return e.marshal(tag, in.Elem())
 	case reflect.Struct:
-		e.structv(tag, in)
+		return e.structv(tag, in)
 	case reflect.Slice, reflect.Array:
-		e.slicev(tag, in)
+		return e.slicev(tag, in)
 	case reflect.String:
-		e.stringv(tag, in)
+		return e.stringv(tag, in)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		e.intv(tag, in)
+		return e.intv(tag, in)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		e.uintv(tag, in)
+		return e.uintv(tag, in)
 	case reflect.Float32, reflect.Float64:
-		e.floatv(tag, in)
+		return e.floatv(tag, in)
 	case reflect.Bool:
-		e.boolv(tag, in)
+		return e.boolv(tag, in)
 	default:
 		panic("cannot marshal type: " + in.Type().String())
 	}
+	return nil
 }
 
-func (e *encoder) mapv(tag string, in reflect.Value) {
-	e.mappingv(tag, func() {
+func (e *encoder) mapv(tag string, in reflect.Value) error {
+	return e.mappingv(tag, func() error {
 		keys := keyList(in.MapKeys())
 		sort.Sort(keys)
 		for _, k := range keys {
-			e.marshal("", k)
-			e.marshal("", in.MapIndex(k))
+			err := e.marshal("", k)
+			if err != nil {
+				return err
+			}
+			err = e.marshal("", in.MapIndex(k))
+			if err != nil {
+				return err
+			}
 		}
+		return nil
 	})
 }
 
@@ -211,12 +222,12 @@ func (e *encoder) fieldByIndex(v reflect.Value, index []int) (field reflect.Valu
 	return v
 }
 
-func (e *encoder) structv(tag string, in reflect.Value) {
+func (e *encoder) structv(tag string, in reflect.Value) error {
 	sinfo, err := getStructInfo(in.Type())
 	if err != nil {
 		panic(err)
 	}
-	e.mappingv(tag, func() {
+	return e.mappingv(tag, func() error {
 		for _, info := range sinfo.FieldsList {
 			var value reflect.Value
 			if info.Inline == nil {
@@ -230,9 +241,15 @@ func (e *encoder) structv(tag string, in reflect.Value) {
 			if info.OmitEmpty && isZero(value) {
 				continue
 			}
-			e.marshal("", reflect.ValueOf(info.Key))
+			err = e.marshal("", reflect.ValueOf(info.Key))
+			if err != nil {
+				return err
+			}
 			e.flow = info.Flow
-			e.marshal("", value)
+			err = e.marshal("", value)
+			if err != nil {
+				return err
+			}
 		}
 		if sinfo.InlineMap >= 0 {
 			m := in.Field(sinfo.InlineMap)
@@ -244,16 +261,23 @@ func (e *encoder) structv(tag string, in reflect.Value) {
 					if _, found := sinfo.FieldsMap[k.String()]; found {
 						panic(fmt.Sprintf("cannot have key %q in inlined map: conflicts with struct field", k.String()))
 					}
-					e.marshal("", k)
+					err = e.marshal("", k)
+					if err != nil {
+						return err
+					}
 					e.flow = false
-					e.marshal("", m.MapIndex(k))
+					err = e.marshal("", m.MapIndex(k))
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
+		return nil
 	})
 }
 
-func (e *encoder) mappingv(tag string, f func()) {
+func (e *encoder) mappingv(tag string, f func() error) error {
 	implicit := tag == ""
 	style := yaml_BLOCK_MAPPING_STYLE
 	if e.flow {
@@ -261,27 +285,43 @@ func (e *encoder) mappingv(tag string, f func()) {
 		style = yaml_FLOW_MAPPING_STYLE
 	}
 	yaml_mapping_start_event_initialize(&e.event, nil, []byte(tag), implicit, style)
-	e.emit()
-	f()
+	err := e.emit()
+	if err != nil {
+		return err
+	}
+	err = f()
+	if err != nil {
+		return err
+	}
 	yaml_mapping_end_event_initialize(&e.event)
-	e.emit()
+	err = e.emit()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (e *encoder) slicev(tag string, in reflect.Value) {
+func (e *encoder) slicev(tag string, in reflect.Value) error {
 	implicit := tag == ""
 	style := yaml_BLOCK_SEQUENCE_STYLE
 	if e.flow {
 		e.flow = false
 		style = yaml_FLOW_SEQUENCE_STYLE
 	}
-	e.must(yaml_sequence_start_event_initialize(&e.event, nil, []byte(tag), implicit, style))
-	e.emit()
+	yaml_sequence_start_event_initialize(&e.event, nil, []byte(tag), implicit, style)
+	err := e.emit()
+	if err != nil {
+		return err
+	}
 	n := in.Len()
 	for i := 0; i < n; i++ {
-		e.marshal("", in.Index(i))
+		err = e.marshal("", in.Index(i))
+		if err != nil {
+			return err
+		}
 	}
-	e.must(yaml_sequence_end_event_initialize(&e.event))
-	e.emit()
+	yaml_sequence_end_event_initialize(&e.event)
+	return e.emit()
 }
 
 // isBase60 returns whether s is in base 60 notation as defined in YAML 1.1.
@@ -321,17 +361,17 @@ func isOldBool(s string) (result bool) {
 	}
 }
 
-func (e *encoder) stringv(tag string, in reflect.Value) {
+func (e *encoder) stringv(tag string, in reflect.Value) error {
 	var style yaml_scalar_style_t
 	s := in.String()
 	canUsePlain := true
 	switch {
 	case !utf8.ValidString(s):
 		if tag == binaryTag {
-			failf("explicitly tagged !!binary data must be base64-encoded")
+			return newYamlError("explicitly tagged !!binary data must be base64-encoded")
 		}
 		if tag != "" {
-			failf("cannot marshal invalid UTF-8 data as %s", shortTag(tag))
+			return newYamlError("cannot marshal invalid UTF-8 data as %s", shortTag(tag))
 		}
 		// It can't be encoded directly as YAML so use a binary tag
 		// and encode it as base64.
@@ -344,7 +384,7 @@ func (e *encoder) stringv(tag string, in reflect.Value) {
 		rtag, _ := resolve("", s)
 		canUsePlain = rtag == strTag && !(isBase60Float(s) || isOldBool(s))
 	}
-	// Note: it's possible for user code to emit invalid YAML
+	// Note: it's possible for user code to emitPanic invalid YAML
 	// if they explicitly specify a tag and a string containing
 	// text that's incompatible with that tag.
 	switch {
@@ -359,36 +399,36 @@ func (e *encoder) stringv(tag string, in reflect.Value) {
 	default:
 		style = yaml_DOUBLE_QUOTED_SCALAR_STYLE
 	}
-	e.emitScalar(s, "", tag, style, nil, nil, nil, nil)
+	return e.emitScalar(s, "", tag, style, nil, nil, nil, nil)
 }
 
-func (e *encoder) boolv(tag string, in reflect.Value) {
+func (e *encoder) boolv(tag string, in reflect.Value) error {
 	var s string
 	if in.Bool() {
 		s = "true"
 	} else {
 		s = "false"
 	}
-	e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
+	return e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
 }
 
-func (e *encoder) intv(tag string, in reflect.Value) {
+func (e *encoder) intv(tag string, in reflect.Value) error {
 	s := strconv.FormatInt(in.Int(), 10)
-	e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
+	return e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
 }
 
-func (e *encoder) uintv(tag string, in reflect.Value) {
+func (e *encoder) uintv(tag string, in reflect.Value) error {
 	s := strconv.FormatUint(in.Uint(), 10)
-	e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
+	return e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
 }
 
-func (e *encoder) timev(tag string, in reflect.Value) {
+func (e *encoder) timev(tag string, in reflect.Value) error {
 	t := in.Interface().(time.Time)
 	s := t.Format(time.RFC3339Nano)
-	e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
+	return e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
 }
 
-func (e *encoder) floatv(tag string, in reflect.Value) {
+func (e *encoder) floatv(tag string, in reflect.Value) error {
 	// Issue #352: When formatting, use the precision of the underlying value
 	precision := 64
 	if in.Kind() == reflect.Float32 {
@@ -404,36 +444,35 @@ func (e *encoder) floatv(tag string, in reflect.Value) {
 	case "NaN":
 		s = ".nan"
 	}
-	e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
+	return e.emitScalar(s, "", tag, yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
 }
 
-func (e *encoder) nilv() {
-	e.emitScalar("null", "", "", yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
+func (e *encoder) nilv() error {
+	return e.emitScalar("null", "", "", yaml_PLAIN_SCALAR_STYLE, nil, nil, nil, nil)
 }
 
-func (e *encoder) emitScalar(value, anchor, tag string, style yaml_scalar_style_t, head, line, foot, tail []byte) {
+func (e *encoder) emitScalar(value, anchor, tag string, style yaml_scalar_style_t, head, line, foot, tail []byte) error {
 	// TODO Kill this function. Replace all initialize calls by their underlining Go literals.
 	implicit := tag == ""
 	if !implicit {
 		tag = longTag(tag)
 	}
-	e.must(yaml_scalar_event_initialize(&e.event, []byte(anchor), []byte(tag), []byte(value), implicit, implicit, style))
+	yaml_scalar_event_initialize(&e.event, []byte(anchor), []byte(tag), []byte(value), implicit, implicit, style)
 	e.event.head_comment = head
 	e.event.line_comment = line
 	e.event.foot_comment = foot
 	e.event.tail_comment = tail
-	e.emit()
+	return e.emit()
 }
 
-func (e *encoder) nodev(in reflect.Value) {
-	e.node(in.Interface().(*Node), "")
+func (e *encoder) nodev(in reflect.Value) error {
+	return e.node(in.Interface().(*Node), "")
 }
 
-func (e *encoder) node(node *Node, tail string) {
+func (e *encoder) node(node *Node, tail string) error {
 	// Zero nodes behave as nil.
 	if node.Kind == 0 && node.IsZero() {
-		e.nilv()
-		return
+		return e.nilv()
 	}
 
 	// If the tag was not explicitly requested, and dropping it won't change the
@@ -472,29 +511,41 @@ func (e *encoder) node(node *Node, tail string) {
 	case DocumentNode:
 		yaml_document_start_event_initialize(&e.event, nil, nil, true)
 		e.event.head_comment = []byte(node.HeadComment)
-		e.emit()
+		err := e.emit()
+		if err != nil {
+			return err
+		}
 		for _, node := range node.Content {
-			e.node(node, "")
+			err := e.node(node, "")
+			if err != nil {
+				return err
+			}
 		}
 		yaml_document_end_event_initialize(&e.event, true)
 		e.event.foot_comment = []byte(node.FootComment)
-		e.emit()
+		return e.emit()
 
 	case SequenceNode:
 		style := yaml_BLOCK_SEQUENCE_STYLE
 		if node.Style&FlowStyle != 0 {
 			style = yaml_FLOW_SEQUENCE_STYLE
 		}
-		e.must(yaml_sequence_start_event_initialize(&e.event, []byte(node.Anchor), []byte(longTag(tag)), tag == "", style))
+		yaml_sequence_start_event_initialize(&e.event, []byte(node.Anchor), []byte(longTag(tag)), tag == "", style)
 		e.event.head_comment = []byte(node.HeadComment)
-		e.emit()
-		for _, node := range node.Content {
-			e.node(node, "")
+		err := e.emit()
+		if err != nil {
+			return err
 		}
-		e.must(yaml_sequence_end_event_initialize(&e.event))
+		for _, node := range node.Content {
+			err := e.node(node, "")
+			if err != nil {
+				return err
+			}
+		}
+		yaml_sequence_end_event_initialize(&e.event)
 		e.event.line_comment = []byte(node.LineComment)
 		e.event.foot_comment = []byte(node.FootComment)
-		e.emit()
+		return e.emit()
 
 	case MappingNode:
 		style := yaml_BLOCK_MAPPING_STYLE
@@ -504,7 +555,10 @@ func (e *encoder) node(node *Node, tail string) {
 		yaml_mapping_start_event_initialize(&e.event, []byte(node.Anchor), []byte(longTag(tag)), tag == "", style)
 		e.event.tail_comment = []byte(tail)
 		e.event.head_comment = []byte(node.HeadComment)
-		e.emit()
+		err := e.emit()
+		if err != nil {
+			return err
+		}
 
 		// The tail logic below moves the foot comment of prior keys to the following key,
 		// since the value for each key may be a nested structure and the foot needs to be
@@ -519,34 +573,40 @@ func (e *encoder) node(node *Node, tail string) {
 				kopy.FootComment = ""
 				k = &kopy
 			}
-			e.node(k, tail)
+			err := e.node(k, tail)
+			if err != nil {
+				return err
+			}
 			tail = foot
 
 			v := node.Content[i+1]
-			e.node(v, "")
+			err = e.node(v, "")
+			if err != nil {
+				return err
+			}
 		}
 
 		yaml_mapping_end_event_initialize(&e.event)
 		e.event.tail_comment = []byte(tail)
 		e.event.line_comment = []byte(node.LineComment)
 		e.event.foot_comment = []byte(node.FootComment)
-		e.emit()
+		return e.emit()
 
 	case AliasNode:
 		yaml_alias_event_initialize(&e.event, []byte(node.Value))
 		e.event.head_comment = []byte(node.HeadComment)
 		e.event.line_comment = []byte(node.LineComment)
 		e.event.foot_comment = []byte(node.FootComment)
-		e.emit()
+		return e.emit()
 
 	case ScalarNode:
 		value := node.Value
 		if !utf8.ValidString(value) {
 			if stag == binaryTag {
-				failf("explicitly tagged !!binary data must be base64-encoded")
+				return newYamlError("explicitly tagged !!binary data must be base64-encoded")
 			}
 			if stag != "" {
-				failf("cannot marshal invalid UTF-8 data as %s", stag)
+				return newYamlError("cannot marshal invalid UTF-8 data as %s", stag)
 			}
 			// It can't be encoded directly as YAML so use a binary tag
 			// and encode it as base64.
@@ -570,8 +630,8 @@ func (e *encoder) node(node *Node, tail string) {
 			style = yaml_DOUBLE_QUOTED_SCALAR_STYLE
 		}
 
-		e.emitScalar(value, node.Anchor, tag, style, []byte(node.HeadComment), []byte(node.LineComment), []byte(node.FootComment), []byte(tail))
+		return e.emitScalar(value, node.Anchor, tag, style, []byte(node.HeadComment), []byte(node.LineComment), []byte(node.FootComment), []byte(tail))
 	default:
-		failf("cannot encode node with unknown kind %d", node.Kind)
+		return newYamlError("cannot encode node with unknown kind %d", node.Kind)
 	}
 }
