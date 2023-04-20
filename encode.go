@@ -88,8 +88,7 @@ func (e *encoder) emit() error {
 		if e.emitter.problem != "" {
 			msg = e.emitter.problem
 		}
-		var r error = yamlError{fmt.Errorf("yaml: " + msg)}
-		return r
+		return fmt.Errorf("yaml: " + msg)
 	}
 	return nil
 }
@@ -145,7 +144,7 @@ func (e *encoder) marshal(tag string, in reflect.Value) error {
 	case Marshaler:
 		v, err := value.MarshalYAML()
 		if err != nil {
-			return yamlError{err}
+			return err
 		}
 		if v == nil {
 			return e.nilv()
@@ -154,7 +153,7 @@ func (e *encoder) marshal(tag string, in reflect.Value) error {
 	case encoding.TextMarshaler:
 		text, err := value.MarshalText()
 		if err != nil {
-			return yamlError{err}
+			return err
 		}
 		in = reflect.ValueOf(string(text))
 	case nil:
@@ -368,10 +367,10 @@ func (e *encoder) stringv(tag string, in reflect.Value) error {
 	switch {
 	case !utf8.ValidString(s):
 		if tag == binaryTag {
-			return newYamlError("explicitly tagged !!binary data must be base64-encoded")
+			return fmt.Errorf("yaml: explicitly tagged !!binary data must be base64-encoded")
 		}
 		if tag != "" {
-			return newYamlError("cannot marshal invalid UTF-8 data as %s", shortTag(tag))
+			return fmt.Errorf("yaml: cannot marshal invalid UTF-8 data as %s", shortTag(tag))
 		}
 		// It can't be encoded directly as YAML so use a binary tag
 		// and encode it as base64.
@@ -603,10 +602,10 @@ func (e *encoder) node(node *Node, tail string) error {
 		value := node.Value
 		if !utf8.ValidString(value) {
 			if stag == binaryTag {
-				return newYamlError("explicitly tagged !!binary data must be base64-encoded")
+				return fmt.Errorf("yaml: explicitly tagged !!binary data must be base64-encoded")
 			}
 			if stag != "" {
-				return newYamlError("cannot marshal invalid UTF-8 data as %s", stag)
+				return fmt.Errorf("yaml: cannot marshal invalid UTF-8 data as %s", stag)
 			}
 			// It can't be encoded directly as YAML so use a binary tag
 			// and encode it as base64.
@@ -632,6 +631,6 @@ func (e *encoder) node(node *Node, tail string) error {
 
 		return e.emitScalar(value, node.Anchor, tag, style, []byte(node.HeadComment), []byte(node.LineComment), []byte(node.FootComment), []byte(tail))
 	default:
-		return newYamlError("cannot encode node with unknown kind %d", node.Kind)
+		return fmt.Errorf("yaml: cannot encode node with unknown kind %d", node.Kind)
 	}
 }

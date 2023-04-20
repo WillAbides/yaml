@@ -213,7 +213,6 @@ func unmarshal(in []byte, out interface{}, strict bool) (err error) {
 //	yaml.Marshal(&T{B: 2}) // Returns "b: 2\n"
 //	yaml.Marshal(&T{F: 1}} // Returns "a: 1\nb: 0\n"
 func Marshal(in interface{}) (out []byte, errOut error) {
-	defer unwrapYamlErr(&errOut)
 	e := newEncoder()
 	defer e.destroy()
 	err := e.marshalDoc("", reflect.ValueOf(in))
@@ -258,7 +257,6 @@ func (e *Encoder) Encode(v interface{}) (errOut error) {
 // See the documentation for Marshal for details about the
 // conversion of Go values into YAML.
 func (n *Node) Encode(v interface{}) (errOut error) {
-	defer unwrapYamlErr(&errOut)
 	e := newEncoder()
 	defer e.destroy()
 	err := e.marshalDoc("", reflect.ValueOf(v))
@@ -291,15 +289,6 @@ func (e *Encoder) Close() (err error) {
 	return e.encoder.finish()
 }
 
-func unwrapYamlErr(err *error) {
-	if *err == nil {
-		return
-	}
-	if e, ok := (*err).(yamlError); ok {
-		*err = e.err
-	}
-}
-
 func handleErr(err *error) {
 	if v := recover(); v != nil {
 		if e, ok := v.(yamlError); ok {
@@ -320,10 +309,6 @@ func fail(err error) {
 
 func failf(format string, args ...interface{}) {
 	panic(yamlError{fmt.Errorf("yaml: "+format, args...)})
-}
-
-func newYamlError(format string, args ...interface{}) yamlError {
-	return yamlError{fmt.Errorf("yaml: "+format, args...)}
 }
 
 func (e yamlError) Error() string {
