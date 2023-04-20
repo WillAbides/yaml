@@ -17,6 +17,7 @@ package yaml
 
 import (
 	"encoding/base64"
+	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -123,10 +124,10 @@ func resolvableTag(tag string) bool {
 
 var yamlStyleFloat = regexp.MustCompile(`^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$`)
 
-func resolve(tag string, in string) (rtag string, out interface{}) {
+func resolve(tag string, in string) (rtag string, out interface{}, errOut error) {
 	tag = shortTag(tag)
 	if !resolvableTag(tag) {
-		return tag, in
+		return tag, in, nil
 	}
 
 	defer func() {
@@ -147,7 +148,7 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 				}
 			}
 		}
-		failf("cannot decode %s `%s` as a %s", shortTag(rtag), in, shortTag(tag))
+		errOut = fmt.Errorf("yaml: cannot decode %s `%s` as a %s", shortTag(rtag), in, shortTag(tag))
 	}()
 
 	// Any data is accepted as a !!str or !!binary.
@@ -159,7 +160,8 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 	if hint != 0 && tag != strTag && tag != binaryTag {
 		// Handle things we can lookup in a map.
 		if item, ok := resolveMap[in]; ok {
-			return item.tag, item.value
+			return item.tag, item.value, nil
+			//return postResolve(tag, item.tag, item.value)
 		}
 
 		// Base 60 floats are a bad idea, were dropped in YAML 1.2, and
@@ -174,7 +176,8 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 			// Not in the map, so maybe a normal float.
 			floatv, err := strconv.ParseFloat(in, 64)
 			if err == nil {
-				return floatTag, floatv
+				return floatTag, floatv, nil
+				//return postResolve(tag, floatTag, floatv)
 			}
 
 		case 'D', 'S':
@@ -184,7 +187,7 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 			if tag == "" || tag == timestampTag {
 				t, ok := parseTimestamp(in)
 				if ok {
-					return timestampTag, t
+					return timestampTag, t, nil
 				}
 			}
 
@@ -192,41 +195,41 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 			intv, err := strconv.ParseInt(plain, 0, 64)
 			if err == nil {
 				if intv == int64(int(intv)) {
-					return intTag, int(intv)
+					return intTag, int(intv), nil
 				} else {
-					return intTag, intv
+					return intTag, intv, nil
 				}
 			}
 			uintv, err := strconv.ParseUint(plain, 0, 64)
 			if err == nil {
-				return intTag, uintv
+				return intTag, uintv, nil
 			}
 			if yamlStyleFloat.MatchString(plain) {
 				floatv, err := strconv.ParseFloat(plain, 64)
 				if err == nil {
-					return floatTag, floatv
+					return floatTag, floatv, nil
 				}
 			}
 			if strings.HasPrefix(plain, "0b") {
 				intv, err := strconv.ParseInt(plain[2:], 2, 64)
 				if err == nil {
 					if intv == int64(int(intv)) {
-						return intTag, int(intv)
+						return intTag, int(intv), nil
 					} else {
-						return intTag, intv
+						return intTag, intv, nil
 					}
 				}
 				uintv, err := strconv.ParseUint(plain[2:], 2, 64)
 				if err == nil {
-					return intTag, uintv
+					return intTag, uintv, nil
 				}
 			} else if strings.HasPrefix(plain, "-0b") {
 				intv, err := strconv.ParseInt("-"+plain[3:], 2, 64)
 				if err == nil {
 					if true || intv == int64(int(intv)) {
-						return intTag, int(intv)
+						return intTag, int(intv), nil
 					} else {
-						return intTag, intv
+						return intTag, intv, nil
 					}
 				}
 			}
@@ -238,22 +241,22 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 				intv, err := strconv.ParseInt(plain[2:], 8, 64)
 				if err == nil {
 					if intv == int64(int(intv)) {
-						return intTag, int(intv)
+						return intTag, int(intv), nil
 					} else {
-						return intTag, intv
+						return intTag, intv, nil
 					}
 				}
 				uintv, err := strconv.ParseUint(plain[2:], 8, 64)
 				if err == nil {
-					return intTag, uintv
+					return intTag, uintv, nil
 				}
 			} else if strings.HasPrefix(plain, "-0o") {
 				intv, err := strconv.ParseInt("-"+plain[3:], 8, 64)
 				if err == nil {
 					if true || intv == int64(int(intv)) {
-						return intTag, int(intv)
+						return intTag, int(intv), nil
 					} else {
-						return intTag, intv
+						return intTag, intv, nil
 					}
 				}
 			}
@@ -261,7 +264,7 @@ func resolve(tag string, in string) (rtag string, out interface{}) {
 			panic("internal error: missing handler for resolver table: " + string(rune(hint)) + " (with " + in + ")")
 		}
 	}
-	return strTag, in
+	return strTag, in, nil
 }
 
 // encodeBase64 encodes s as base64 that is broken up into multiple lines

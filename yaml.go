@@ -114,11 +114,14 @@ func (dec *Decoder) KnownFields(enable bool) {
 //
 // See the documentation for Unmarshal for details about the
 // conversion of YAML into a Go value.
-func (dec *Decoder) Decode(v interface{}) (err error) {
+func (dec *Decoder) Decode(v interface{}) (errOut error) {
 	d := newDecoder()
 	d.knownFields = dec.knownFields
-	defer handleErr(&err)
-	node := dec.parser.parse()
+	//defer handleErr(&errOut)
+	node, err := dec.parser.parse()
+	if err != nil {
+		return err
+	}
 	if node == nil {
 		return io.EOF
 	}
@@ -126,9 +129,12 @@ func (dec *Decoder) Decode(v interface{}) (err error) {
 	if out.Kind() == reflect.Ptr && !out.IsNil() {
 		out = out.Elem()
 	}
-	d.unmarshal(node, out)
-	if len(d.terrors) > 0 {
-		return &TypeError{d.terrors}
+	_, err = d.unmarshal(node, out)
+	if err != nil {
+		return err
+	}
+	if len(d.typeErrors) > 0 {
+		return &TypeError{d.typeErrors}
 	}
 	return nil
 }
@@ -137,35 +143,44 @@ func (dec *Decoder) Decode(v interface{}) (err error) {
 //
 // See the documentation for Unmarshal for details about the
 // conversion of YAML into a Go value.
-func (n *Node) Decode(v interface{}) (err error) {
+func (n *Node) Decode(v interface{}) (errOut error) {
 	d := newDecoder()
-	defer handleErr(&err)
+	//defer handleErr(&errOut)
 	out := reflect.ValueOf(v)
 	if out.Kind() == reflect.Ptr && !out.IsNil() {
 		out = out.Elem()
 	}
-	d.unmarshal(n, out)
-	if len(d.terrors) > 0 {
-		return &TypeError{d.terrors}
+	_, err := d.unmarshal(n, out)
+	if err != nil {
+		return err
+	}
+	if len(d.typeErrors) > 0 {
+		return &TypeError{d.typeErrors}
 	}
 	return nil
 }
 
-func unmarshal(in []byte, out interface{}, strict bool) (err error) {
-	defer handleErr(&err)
+func unmarshal(in []byte, out interface{}, strict bool) (errOut error) {
+	//defer handleErr(&errOut)
 	d := newDecoder()
 	p := newParser(in)
 	defer p.destroy()
-	node := p.parse()
+	node, err := p.parse()
+	if err != nil {
+		return err
+	}
 	if node != nil {
 		v := reflect.ValueOf(out)
 		if v.Kind() == reflect.Ptr && !v.IsNil() {
 			v = v.Elem()
 		}
-		d.unmarshal(node, v)
+		_, err := d.unmarshal(node, v)
+		if err != nil {
+			return err
+		}
 	}
-	if len(d.terrors) > 0 {
-		return &TypeError{d.terrors}
+	if len(d.typeErrors) > 0 {
+		return &TypeError{d.typeErrors}
 	}
 	return nil
 }
@@ -270,7 +285,10 @@ func (n *Node) Encode(v interface{}) (errOut error) {
 	p := newParser(e.out)
 	p.textless = true
 	defer p.destroy()
-	doc := p.parse()
+	doc, err := p.parse()
+	if err != nil {
+		return err
+	}
 	*n = *doc.Content[0]
 	return nil
 }
@@ -287,38 +305,6 @@ func (e *Encoder) SetIndent(spaces int) {
 // It does not write a stream terminating string "...".
 func (e *Encoder) Close() (err error) {
 	return e.encoder.finish()
-}
-
-func handleErr(err *error) {
-	if v := recover(); v != nil {
-		if e, ok := v.(yamlError); ok {
-			*err = e.err
-		} else {
-			panic(v)
-		}
-	}
-}
-
-type yamlError struct {
-	err error
-}
-
-func fail(err error) {
-	panic(yamlError{err})
-}
-
-func failf(format string, args ...interface{}) {
-	panic(yamlError{fmt.Errorf("yaml: "+format, args...)})
-}
-
-func (e yamlError) Error() string {
-	return e.err.Error()
-}
-
-func panicErr(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
 
 // A TypeError is returned by Unmarshal when one or more fields in
@@ -458,7 +444,10 @@ func (n *Node) ShortTag() string {
 				return n.Alias.ShortTag()
 			}
 		case ScalarNode:
-			tag, _ := resolve("", n.Value)
+			tag, _, err := resolve("", n.Value)
+			if err == nil {
+				panic(err)
+			}
 			return tag
 		case 0:
 			// Special case to make the zero value convenient.
