@@ -1,10 +1,10 @@
 package yaml_test
 
 import (
+	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 
-	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 )
 
@@ -42,18 +42,18 @@ var limitTests = []struct {
 	{name: "1000kb of 10000-nested lines", data: []byte(strings.Repeat(`- `+strings.Repeat(`[`, 10000)+strings.Repeat(`]`, 10000)+"\n", 1000*1024/20000))},
 }
 
-func (s *S) TestLimits(c *C) {
+func TestLimits(t *testing.T) {
 	if testing.Short() {
 		return
 	}
 	for _, tc := range limitTests {
 		var v interface{}
 		err := yaml.Unmarshal(tc.data, &v)
-		if len(tc.error) > 0 {
-			c.Assert(err, ErrorMatches, tc.error, Commentf("testcase: %s", tc.name))
-		} else {
-			c.Assert(err, IsNil, Commentf("testcase: %s", tc.name))
+		if tc.error == "" {
+			require.NoError(t, err)
+			return
 		}
+		require.EqualError(t, err, tc.error)
 	}
 }
 
