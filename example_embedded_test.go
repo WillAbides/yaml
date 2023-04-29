@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/willabides/go-yaml"
+	"github.com/willabides/yaml"
 )
 
 // An example showing how to unmarshal embedded

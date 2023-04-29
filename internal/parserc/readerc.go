@@ -23,7 +23,7 @@
 package parserc
 
 import (
-	"github.com/willabides/go-yaml/internal/yamlh"
+	"github.com/willabides/yaml/internal/yamlh"
 	"io"
 )
 

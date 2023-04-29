@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/willabides/go-yaml/internal/yamlh"
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 func analyzeAnchor(e *Emitter, anchor []byte, alias bool) error {

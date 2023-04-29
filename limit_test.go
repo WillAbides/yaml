@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/willabides/go-yaml"
+	"github.com/willabides/yaml"
 )
 
 var limitTests = []struct {

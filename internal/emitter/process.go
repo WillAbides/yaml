@@ -1,6 +1,6 @@
 package emitter
 
-import "github.com/willabides/go-yaml/internal/yamlh"
+import "github.com/willabides/yaml/internal/yamlh"
 
 func processLineComment(e *Emitter) error {
 	if len(e.lineComment) == 0 {

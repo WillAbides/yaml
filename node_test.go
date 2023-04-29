@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/willabides/go-yaml"
+	"github.com/willabides/yaml"
 )
 
 var nodeTests = []struct {

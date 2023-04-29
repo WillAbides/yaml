@@ -1,4 +1,4 @@
-module github.com/willabides/go-yaml
+module github.com/willabides/yaml
 
 go 1.11
 

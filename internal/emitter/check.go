@@ -1,6 +1,6 @@
 package emitter
 
-import "github.com/willabides/go-yaml/internal/yamlh"
+import "github.com/willabides/yaml/internal/yamlh"
 
 // Check if the next events represent an empty sequence.
 func checkEmptySequence(e *Emitter) bool {

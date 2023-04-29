@@ -23,7 +23,7 @@
 package yaml
 
 import (
-	"github.com/willabides/go-yaml/internal/yamlh"
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 // Create STREAM-START.

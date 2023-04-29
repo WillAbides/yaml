@@ -2,8 +2,8 @@ package emitter
 
 import (
 	"fmt"
-	"github.com/willabides/go-yaml/internal/common"
-	"github.com/willabides/go-yaml/internal/yamlh"
+	"github.com/willabides/yaml/internal/common"
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 // expect DOCUMENT-START or STREAM-END.
