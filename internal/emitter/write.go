@@ -1,6 +1,6 @@
 package emitter
 
-import "gopkg.in/yaml.v3/internal/yamlh"
+import "github.com/willabides/go-yaml/internal/yamlh"
 
 // writeBom writes the BOM character.
 func writeBom(e *Emitter) error {

@@ -1,7 +1,7 @@
 package common
 
 import (
-	"gopkg.in/yaml.v3/internal/yamlh"
+	"github.com/willabides/go-yaml/internal/yamlh"
 )
 
 var DefaultTagDirectives = []yamlh.TagDirective{

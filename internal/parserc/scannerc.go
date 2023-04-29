@@ -25,7 +25,7 @@ package parserc
 import (
 	"bytes"
 	"fmt"
-	"gopkg.in/yaml.v3/internal/yamlh"
+	"github.com/willabides/go-yaml/internal/yamlh"
 )
 
 // Introduction

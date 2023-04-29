@@ -2,8 +2,8 @@ package emitter
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3/internal/common"
-	"gopkg.in/yaml.v3/internal/yamlh"
+	"github.com/willabides/go-yaml/internal/common"
+	"github.com/willabides/go-yaml/internal/yamlh"
 )
 
 // expect DOCUMENT-START or STREAM-END.

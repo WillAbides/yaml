@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	"github.com/willabides/go-yaml"
 )
 
 var unmarshalIntTest = 123

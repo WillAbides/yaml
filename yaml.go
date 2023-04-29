@@ -24,7 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gopkg.in/yaml.v3/internal/resolve"
+	"github.com/willabides/go-yaml/internal/resolve"
 	"io"
 	"reflect"
 	"strings"
