@@ -16,43 +16,48 @@
 package yaml
 
 import (
+	"bytes"
 	"encoding"
 	"encoding/base64"
 	"fmt"
+	"gopkg.in/yaml.v3/internal/parserc"
+	"gopkg.in/yaml.v3/internal/resolve"
+	"gopkg.in/yaml.v3/internal/yamlh"
 	"io"
 	"math"
 	"reflect"
-	"strconv"
 	"time"
 )
 
 // ----------------------------------------------------------------------------
-// Parser, produces a node tree out of a libyaml event stream.
+// parser, produces a node tree out of a libyaml event stream.
 
 type parser struct {
-	parser   yaml_parser_t
-	event    yaml_event_t
+	parser   parserc.YamlParser
+	event    yamlh.Event
 	doc      *Node
 	anchors  map[string]*Node
 	doneInit bool
 	textless bool
 }
 
-func newParser(b []byte) *parser {
-	p := parser{}
-	yaml_parser_initialize(&p.parser)
-	if len(b) == 0 {
-		b = []byte{'\n'}
-	}
-	yaml_parser_set_input_string(&p.parser, b)
-	return &p
+func (p *parser) SetTextless(textless bool) {
+	p.textless = textless
 }
 
-func newParserFromReader(r io.Reader) *parser {
-	p := parser{}
-	yaml_parser_initialize(&p.parser)
-	yaml_parser_set_input_reader(&p.parser, r)
-	return &p
+type Parser interface {
+	Parse() (*Node, error)
+	SetTextless(textless bool)
+}
+
+func NewParser(b []byte) Parser {
+	return NewParserFromReader(bytes.NewReader(b))
+}
+
+func NewParserFromReader(r io.Reader) Parser {
+	return &parser{
+		parser: *parserc.New(r),
+	}
 }
 
 func (p *parser) init() error {
@@ -60,7 +65,7 @@ func (p *parser) init() error {
 		return nil
 	}
 	p.anchors = make(map[string]*Node)
-	err := p.expect(yaml_STREAM_START_EVENT)
+	err := p.expect(yamlh.STREAM_START_EVENT)
 	if err != nil {
 		return err
 	}
@@ -68,74 +73,39 @@ func (p *parser) init() error {
 	return nil
 }
 
-func (p *parser) destroy() {
-	if p.event.typ != yaml_NO_EVENT {
-		yaml_event_delete(&p.event)
-	}
-	yaml_parser_delete(&p.parser)
-}
-
 // expect consumes an event from the event stream and
 // checks that it's of the expected type.
-func (p *parser) expect(e yaml_event_type_t) error {
-	if p.event.typ == yaml_NO_EVENT {
-		if !yaml_parser_parse(&p.parser, &p.event) {
-			return p.fail()
+func (p *parser) expect(e yamlh.EventType) error {
+	if p.event.Type == yamlh.NO_EVENT {
+		event, err := parserc.Parse(&p.parser)
+		if err != nil {
+			return err
 		}
+		p.event = *event
 	}
-	if p.event.typ == yaml_STREAM_END_EVENT {
+	if p.event.Type == yamlh.STREAM_END_EVENT {
 		return fmt.Errorf("yaml: attempted to go past the end of stream; corrupted value?")
 	}
-	if p.event.typ != e {
-		p.parser.problem = fmt.Sprintf("expected %s event but got %s", e, p.event.typ)
-		return p.fail()
+	if p.event.Type != e {
+		return fmt.Errorf("yaml: expected %s event but got %s", e, p.event.Type)
 	}
-	yaml_event_delete(&p.event)
-	p.event.typ = yaml_NO_EVENT
+	p.event.Type = yamlh.NO_EVENT
 	return nil
 }
 
 // peek peeks at the next event in the event stream,
 // puts the results into p.event and returns the event type.
-func (p *parser) peek() (yaml_event_type_t, error) {
-	if p.event.typ != yaml_NO_EVENT {
-		return p.event.typ, nil
+func (p *parser) peek() (yamlh.EventType, error) {
+	if p.event.Type != yamlh.NO_EVENT {
+		return p.event.Type, nil
 	}
-	// It's curious choice from the underlying API to generally return a
-	// positive result on success, but on this case return true in an error
-	// scenario. This was the source of bugs in the past (issue #666).
-	if !yaml_parser_parse(&p.parser, &p.event) || p.parser.error != yaml_NO_ERROR {
-		return 0, p.fail()
-	}
-	return p.event.typ, nil
-}
 
-func (p *parser) fail() error {
-	var where string
-	var line int
-	if p.parser.context_mark.line != 0 {
-		line = p.parser.context_mark.line
-		// Scanner errors don't iterate line before returning error
-		if p.parser.error == yaml_SCANNER_ERROR {
-			line++
-		}
-	} else if p.parser.problem_mark.line != 0 {
-		line = p.parser.problem_mark.line
-		// Scanner errors don't iterate line before returning error
-		if p.parser.error == yaml_SCANNER_ERROR {
-			line++
-		}
+	event, err := parserc.Parse(&p.parser)
+	if err != nil {
+		return 0, err
 	}
-	if line != 0 {
-		where = "line " + strconv.Itoa(line) + ": "
-	}
-	var msg string
-	if len(p.parser.problem) > 0 {
-		msg = p.parser.problem
-	} else {
-		msg = "unknown problem parsing YAML content"
-	}
-	return fmt.Errorf("yaml: %s%s", where, msg)
+	p.event = *event
+	return event.Type, nil
 }
 
 func (p *parser) anchor(n *Node, anchor []byte) {
@@ -145,7 +115,7 @@ func (p *parser) anchor(n *Node, anchor []byte) {
 	}
 }
 
-func (p *parser) parse() (*Node, error) {
+func (p *parser) Parse() (*Node, error) {
 	err := p.init()
 	if err != nil {
 		return nil, err
@@ -155,23 +125,23 @@ func (p *parser) parse() (*Node, error) {
 		return nil, err
 	}
 	switch nextEvent {
-	case yaml_SCALAR_EVENT:
+	case yamlh.SCALAR_EVENT:
 		return p.scalar()
-	case yaml_ALIAS_EVENT:
+	case yamlh.ALIAS_EVENT:
 		return p.alias()
-	case yaml_MAPPING_START_EVENT:
+	case yamlh.MAPPING_START_EVENT:
 		return p.mapping()
-	case yaml_SEQUENCE_START_EVENT:
+	case yamlh.SEQUENCE_START_EVENT:
 		return p.sequence()
-	case yaml_DOCUMENT_START_EVENT:
+	case yamlh.DOCUMENT_START_EVENT:
 		return p.document()
-	case yaml_STREAM_END_EVENT:
+	case yamlh.STREAM_END_EVENT:
 		// Happens when attempting to decode an empty buffer.
 		return nil, nil
-	case yaml_TAIL_COMMENT_EVENT:
+	case yamlh.TAIL_COMMENT_EVENT:
 		panic("internal error: unexpected tail comment event (please report)")
 	default:
-		panic("internal error: attempted to parse unknown event (please report): " + p.event.typ.String())
+		panic("internal error: attempted to parse unknown event (please report): " + p.event.Type.String())
 	}
 }
 
@@ -179,12 +149,12 @@ func (p *parser) node(kind Kind, defaultTag, tag, value string) (*Node, error) {
 	var style Style
 	var err error
 	if tag != "" && tag != "!" {
-		tag = shortTag(tag)
+		tag = resolve.ShortTag(tag)
 		style = TaggedStyle
 	} else if defaultTag != "" {
 		tag = defaultTag
 	} else if kind == ScalarNode {
-		tag, _, err = resolve("", value)
+		tag, _, err = resolve.Resolve("", value)
 		if err != nil {
 			return nil, err
 		}
@@ -196,17 +166,17 @@ func (p *parser) node(kind Kind, defaultTag, tag, value string) (*Node, error) {
 		Style: style,
 	}
 	if !p.textless {
-		n.Line = p.event.start_mark.line + 1
-		n.Column = p.event.start_mark.column + 1
-		n.HeadComment = string(p.event.head_comment)
-		n.LineComment = string(p.event.line_comment)
-		n.FootComment = string(p.event.foot_comment)
+		n.Line = p.event.Start_mark.Line + 1
+		n.Column = p.event.Start_mark.Column + 1
+		n.HeadComment = string(p.event.Head_comment)
+		n.LineComment = string(p.event.Line_comment)
+		n.FootComment = string(p.event.Foot_comment)
 	}
 	return n, nil
 }
 
 func (p *parser) parseChild(parent *Node) (*Node, error) {
-	child, err := p.parse()
+	child, err := p.Parse()
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +190,7 @@ func (p *parser) document() (*Node, error) {
 		return nil, err
 	}
 	p.doc = n
-	err = p.expect(yaml_DOCUMENT_START_EVENT)
+	err = p.expect(yamlh.DOCUMENT_START_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -232,10 +202,10 @@ func (p *parser) document() (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nextEvent == yaml_DOCUMENT_END_EVENT {
-		n.FootComment = string(p.event.foot_comment)
+	if nextEvent == yamlh.DOCUMENT_END_EVENT {
+		n.FootComment = string(p.event.Foot_comment)
 	}
-	err = p.expect(yaml_DOCUMENT_END_EVENT)
+	err = p.expect(yamlh.DOCUMENT_END_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +213,7 @@ func (p *parser) document() (*Node, error) {
 }
 
 func (p *parser) alias() (*Node, error) {
-	n, err := p.node(AliasNode, "", "", string(p.event.anchor))
+	n, err := p.node(AliasNode, "", "", string(p.event.Anchor))
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +221,7 @@ func (p *parser) alias() (*Node, error) {
 	if n.Alias == nil {
 		return nil, fmt.Errorf("yaml: unknown anchor '%s' referenced", n.Value)
 	}
-	err = p.expect(yaml_ALIAS_EVENT)
+	err = p.expect(yamlh.ALIAS_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -259,35 +229,35 @@ func (p *parser) alias() (*Node, error) {
 }
 
 func (p *parser) scalar() (*Node, error) {
-	var parsedStyle = p.event.scalar_style()
+	var parsedStyle = p.event.Scalar_style()
 	var nodeStyle Style
 	switch {
-	case parsedStyle&yaml_DOUBLE_QUOTED_SCALAR_STYLE != 0:
+	case parsedStyle&yamlh.DOUBLE_QUOTED_SCALAR_STYLE != 0:
 		nodeStyle = DoubleQuotedStyle
-	case parsedStyle&yaml_SINGLE_QUOTED_SCALAR_STYLE != 0:
+	case parsedStyle&yamlh.SINGLE_QUOTED_SCALAR_STYLE != 0:
 		nodeStyle = SingleQuotedStyle
-	case parsedStyle&yaml_LITERAL_SCALAR_STYLE != 0:
+	case parsedStyle&yamlh.LITERAL_SCALAR_STYLE != 0:
 		nodeStyle = LiteralStyle
-	case parsedStyle&yaml_FOLDED_SCALAR_STYLE != 0:
+	case parsedStyle&yamlh.FOLDED_SCALAR_STYLE != 0:
 		nodeStyle = FoldedStyle
 	}
-	var nodeValue = string(p.event.value)
-	var nodeTag = string(p.event.tag)
+	var nodeValue = string(p.event.Value)
+	var nodeTag = string(p.event.Tag)
 	var defaultTag string
 	if nodeStyle == 0 {
 		if nodeValue == "<<" {
-			defaultTag = mergeTag
+			defaultTag = resolve.MergeTag
 		}
 	} else {
-		defaultTag = strTag
+		defaultTag = resolve.StrTag
 	}
 	n, err := p.node(ScalarNode, defaultTag, nodeTag, nodeValue)
 	if err != nil {
 		return nil, err
 	}
 	n.Style |= nodeStyle
-	p.anchor(n, p.event.anchor)
-	err = p.expect(yaml_SCALAR_EVENT)
+	p.anchor(n, p.event.Anchor)
+	err = p.expect(yamlh.SCALAR_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -295,15 +265,15 @@ func (p *parser) scalar() (*Node, error) {
 }
 
 func (p *parser) sequence() (*Node, error) {
-	n, err := p.node(SequenceNode, seqTag, string(p.event.tag), "")
+	n, err := p.node(SequenceNode, resolve.SeqTag, string(p.event.Tag), "")
 	if err != nil {
 		return nil, err
 	}
-	if p.event.sequence_style()&yaml_FLOW_SEQUENCE_STYLE != 0 {
+	if p.event.Sequence_style()&yamlh.FLOW_SEQUENCE_STYLE != 0 {
 		n.Style |= FlowStyle
 	}
-	p.anchor(n, p.event.anchor)
-	err = p.expect(yaml_SEQUENCE_START_EVENT)
+	p.anchor(n, p.event.Anchor)
+	err = p.expect(yamlh.SEQUENCE_START_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +282,7 @@ func (p *parser) sequence() (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		if nextEvent == yaml_SEQUENCE_END_EVENT {
+		if nextEvent == yamlh.SEQUENCE_END_EVENT {
 			break
 		}
 		_, err = p.parseChild(n)
@@ -320,9 +290,9 @@ func (p *parser) sequence() (*Node, error) {
 			return nil, err
 		}
 	}
-	n.LineComment = string(p.event.line_comment)
-	n.FootComment = string(p.event.foot_comment)
-	err = p.expect(yaml_SEQUENCE_END_EVENT)
+	n.LineComment = string(p.event.Line_comment)
+	n.FootComment = string(p.event.Foot_comment)
+	err = p.expect(yamlh.SEQUENCE_END_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -330,17 +300,17 @@ func (p *parser) sequence() (*Node, error) {
 }
 
 func (p *parser) mapping() (*Node, error) {
-	n, err := p.node(MappingNode, mapTag, string(p.event.tag), "")
+	n, err := p.node(MappingNode, resolve.MapTag, string(p.event.Tag), "")
 	if err != nil {
 		return nil, err
 	}
 	block := true
-	if p.event.mapping_style()&yaml_FLOW_MAPPING_STYLE != 0 {
+	if p.event.Mapping_style()&yamlh.FLOW_MAPPING_STYLE != 0 {
 		block = false
 		n.Style |= FlowStyle
 	}
-	p.anchor(n, p.event.anchor)
-	err = p.expect(yaml_MAPPING_START_EVENT)
+	p.anchor(n, p.event.Anchor)
+	err = p.expect(yamlh.MAPPING_START_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +319,7 @@ func (p *parser) mapping() (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		if nextEvent == yaml_MAPPING_END_EVENT {
+		if nextEvent == yamlh.MAPPING_END_EVENT {
 			break
 		}
 
@@ -376,23 +346,23 @@ func (p *parser) mapping() (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		if nextEvent == yaml_TAIL_COMMENT_EVENT {
+		if nextEvent == yamlh.TAIL_COMMENT_EVENT {
 			if k.FootComment == "" {
-				k.FootComment = string(p.event.foot_comment)
+				k.FootComment = string(p.event.Foot_comment)
 			}
-			err = p.expect(yaml_TAIL_COMMENT_EVENT)
+			err = p.expect(yamlh.TAIL_COMMENT_EVENT)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	n.LineComment = string(p.event.line_comment)
-	n.FootComment = string(p.event.foot_comment)
+	n.LineComment = string(p.event.Line_comment)
+	n.FootComment = string(p.event.Foot_comment)
 	if n.Style&FlowStyle == 0 && n.FootComment != "" && len(n.Content) > 1 {
 		n.Content[len(n.Content)-2].FootComment = n.FootComment
 		n.FootComment = ""
 	}
-	err = p.expect(yaml_MAPPING_END_EVENT)
+	err = p.expect(yamlh.MAPPING_END_EVENT)
 	if err != nil {
 		return nil, err
 	}
@@ -444,14 +414,14 @@ func (d *decoder) terror(n *Node, tag string, out reflect.Value) {
 		tag = n.Tag
 	}
 	value := n.Value
-	if tag != seqTag && tag != mapTag {
+	if tag != resolve.SeqTag && tag != resolve.MapTag {
 		if len(value) > 10 {
 			value = " `" + value[:7] + "...`"
 		} else {
 			value = " `" + value + "`"
 		}
 	}
-	d.typeErrors = append(d.typeErrors, fmt.Sprintf("line %d: cannot unmarshal %s%s into %s", n.Line, shortTag(tag), value, out.Type()))
+	d.typeErrors = append(d.typeErrors, fmt.Sprintf("line %d: cannot unmarshal %s%s into %s", n.Line, resolve.ShortTag(tag), value, out.Type()))
 }
 
 func (d *decoder) callUnmarshaler(n *Node, u Unmarshaler) (bool, error) {
@@ -498,7 +468,7 @@ func (d *decoder) callObsoleteUnmarshaler(n *Node, u obsoleteUnmarshaler) (bool,
 //
 // If n holds a null value, prepare returns before doing anything.
 func (d *decoder) prepare(n *Node, out reflect.Value) (newout reflect.Value, unmarshaled, good bool, _ error) {
-	if n.ShortTag() == nullTag {
+	if n.ShortTag() == resolve.NullTag {
 		return out, false, false, nil
 	}
 	var err error
@@ -534,7 +504,7 @@ func (d *decoder) prepare(n *Node, out reflect.Value) (newout reflect.Value, unm
 }
 
 func (d *decoder) fieldByIndex(n *Node, v reflect.Value, index []int) (field reflect.Value) {
-	if n.ShortTag() == nullTag {
+	if n.ShortTag() == resolve.NullTag {
 		return reflect.Value{}
 	}
 	for _, num := range index {
@@ -670,14 +640,14 @@ func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 	var resolved interface{}
 	var err error
 	if n.indicatedString() {
-		tag = strTag
+		tag = resolve.StrTag
 		resolved = n.Value
 	} else {
-		tag, resolved, err = resolve(n.Tag, n.Value)
+		tag, resolved, err = resolve.Resolve(n.Tag, n.Value)
 		if err != nil {
 			return false, err
 		}
-		if tag == binaryTag {
+		if tag == resolve.BinaryTag {
 			data, err := base64.StdEncoding.DecodeString(resolved.(string))
 			if err != nil {
 				return false, fmt.Errorf("yaml: !!binary value contains invalid base64 data")
@@ -699,7 +669,7 @@ func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 		u, ok := out.Addr().Interface().(encoding.TextUnmarshaler)
 		if ok {
 			var text []byte
-			if tag == binaryTag {
+			if tag == resolve.BinaryTag {
 				text = []byte(resolved.(string))
 			} else {
 				// We let any value be unmarshaled into TextUnmarshaler.
@@ -716,7 +686,7 @@ func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 	}
 	switch out.Kind() {
 	case reflect.String:
-		if tag == binaryTag {
+		if tag == resolve.BinaryTag {
 			out.SetString(resolved.(string))
 			return true, nil
 		}
@@ -849,7 +819,7 @@ func (d *decoder) sequence(n *Node, out reflect.Value) (bool, error) {
 		iface = out
 		out = settableValueOf(make([]interface{}, l))
 	default:
-		d.terror(n, seqTag, out)
+		d.terror(n, resolve.SeqTag, out)
 		return false, nil
 	}
 	et := out.Type().Elem()
@@ -908,7 +878,7 @@ func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 		}
 		iface.Set(out)
 	default:
-		d.terror(n, mapTag, out)
+		d.terror(n, resolve.MapTag, out)
 		return false, nil
 	}
 
@@ -966,7 +936,7 @@ func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 			if err != nil {
 				return false, err
 			}
-			if ok || n.Content[i+1].ShortTag() == nullTag && (mapIsNew || !out.MapIndex(k).IsValid()) {
+			if ok || n.Content[i+1].ShortTag() == resolve.NullTag && (mapIsNew || !out.MapIndex(k).IsValid()) {
 				out.SetMapIndex(k, e)
 			}
 		}
@@ -992,7 +962,7 @@ func isStringMap(n *Node) bool {
 	l := len(n.Content)
 	for i := 0; i < l; i += 2 {
 		short := n.Content[i].ShortTag()
-		if short != strTag && short != mergeTag {
+		if short != resolve.StrTag && short != resolve.MergeTag {
 			return false
 		}
 	}
@@ -1149,5 +1119,5 @@ func (d *decoder) merge(parent *Node, merge *Node, out reflect.Value) error {
 }
 
 func isMerge(n *Node) bool {
-	return n.Kind == ScalarNode && n.Value == "<<" && (n.Tag == "" || n.Tag == "!" || shortTag(n.Tag) == mergeTag)
+	return n.Kind == ScalarNode && n.Value == "<<" && (n.Tag == "" || n.Tag == "!" || resolve.ShortTag(n.Tag) == resolve.MergeTag)
 }

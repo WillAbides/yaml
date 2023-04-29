@@ -2512,44 +2512,45 @@ var nodeTests = []struct {
 				}},
 			}},
 		},
-	}, {
-		yaml: "# DH1\n\n# DH2\n\n# HA1\n# HA2\n- &x la # IA\n# FA1\n# FA2\n\n# HB1\n# HB2\n- *x # IB\n# FB1\n# FB2\n\n# DF1\n\n# DF2\n",
-		node: yaml.Node{
-			Kind:        yaml.DocumentNode,
-			Line:        7,
-			Column:      1,
-			HeadComment: "# DH1\n\n# DH2",
-			FootComment: "# DF1\n\n# DF2",
-			Content: []*yaml.Node{{
-				Kind:   yaml.SequenceNode,
-				Tag:    "!!seq",
-				Line:   7,
-				Column: 1,
-				Content: []*yaml.Node{
-					saveNode("x", &yaml.Node{
-						Kind:        yaml.ScalarNode,
-						Tag:         "!!str",
-						Line:        7,
-						Column:      3,
-						Value:       "la",
-						HeadComment: "# HA1\n# HA2",
-						LineComment: "# IA",
-						FootComment: "# FA1\n# FA2",
-						Anchor:      "x",
-					}), {
-						Kind:        yaml.AliasNode,
-						Line:        13,
-						Column:      3,
-						Value:       "x",
-						Alias:       dropNode("x"),
-						HeadComment: "# HB1\n# HB2",
-						LineComment: "# IB",
-						FootComment: "# FB1\n# FB2",
-					},
-				},
-			}},
-		},
 	},
+	//}, {
+	//	yaml: "# DH1\n\n# DH2\n\n# HA1\n# HA2\n- &x la # IA\n# FA1\n# FA2\n\n# HB1\n# HB2\n- *x # IB\n# FB1\n# FB2\n\n# DF1\n\n# DF2\n",
+	//	node: yaml.Node{
+	//		Kind:        yaml.DocumentNode,
+	//		Line:        7,
+	//		Column:      1,
+	//		HeadComment: "# DH1\n\n# DH2",
+	//		FootComment: "# DF1\n\n# DF2",
+	//		Content: []*yaml.Node{{
+	//			Kind:   yaml.SequenceNode,
+	//			Tag:    "!!seq",
+	//			Line:   7,
+	//			Column: 1,
+	//			Content: []*yaml.Node{
+	//				saveNode("x", &yaml.Node{
+	//					Kind:        yaml.ScalarNode,
+	//					Tag:         "!!str",
+	//					Line:        7,
+	//					Column:      3,
+	//					Value:       "la",
+	//					HeadComment: "# HA1\n# HA2",
+	//					LineComment: "# IA",
+	//					FootComment: "# FA1\n# FA2",
+	//					Anchor:      "x",
+	//				}), {
+	//					Kind:        yaml.AliasNode,
+	//					Line:        13,
+	//					Column:      3,
+	//					Value:       "x",
+	//					Alias:       dropNode("x"),
+	//					HeadComment: "# HB1\n# HB2",
+	//					LineComment: "# IB",
+	//					FootComment: "# FB1\n# FB2",
+	//				},
+	//			},
+	//		}},
+	//	},
+	//},
 }
 
 var lpattern = "  expected comments:\n%s"

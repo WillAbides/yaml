@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package resolve
 
 import (
 	"encoding/base64"
@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,7 +34,9 @@ type resolveMapItem struct {
 var resolveTable = make([]byte, 256)
 var resolveMap = make(map[string]resolveMapItem)
 
-func init() {
+var initResolveOnce sync.Once
+
+func initResolve() {
 	t := resolveTable
 	t[int('+')] = 'S' // Sign
 	t[int('-')] = 'S'
@@ -50,73 +53,67 @@ func init() {
 		tag string
 		l   []string
 	}{
-		{true, boolTag, []string{"true", "True", "TRUE"}},
-		{false, boolTag, []string{"false", "False", "FALSE"}},
-		{nil, nullTag, []string{"", "~", "null", "Null", "NULL"}},
-		{math.NaN(), floatTag, []string{".nan", ".NaN", ".NAN"}},
-		{math.Inf(+1), floatTag, []string{".inf", ".Inf", ".INF"}},
-		{math.Inf(+1), floatTag, []string{"+.inf", "+.Inf", "+.INF"}},
-		{math.Inf(-1), floatTag, []string{"-.inf", "-.Inf", "-.INF"}},
-		{"<<", mergeTag, []string{"<<"}},
+		{v: true, tag: BoolTag, l: []string{"true", "True", "TRUE"}},
+		{v: false, tag: BoolTag, l: []string{"false", "False", "FALSE"}},
+		{tag: NullTag, l: []string{"", "~", "null", "Null", "NULL"}},
+		{v: math.NaN(), tag: FloatTag, l: []string{".nan", ".NaN", ".NAN"}},
+		{v: math.Inf(+1), tag: FloatTag, l: []string{".inf", ".Inf", ".INF"}},
+		{v: math.Inf(+1), tag: FloatTag, l: []string{"+.inf", "+.Inf", "+.INF"}},
+		{v: math.Inf(-1), tag: FloatTag, l: []string{"-.inf", "-.Inf", "-.INF"}},
+		{v: "<<", tag: MergeTag, l: []string{"<<"}},
 	}
 
 	m := resolveMap
 	for _, item := range resolveMapList {
 		for _, s := range item.l {
-			m[s] = resolveMapItem{item.v, item.tag}
+			m[s] = resolveMapItem{value: item.v, tag: item.tag}
 		}
 	}
 }
 
 const (
-	nullTag      = "!!null"
-	boolTag      = "!!bool"
-	strTag       = "!!str"
-	intTag       = "!!int"
-	floatTag     = "!!float"
-	timestampTag = "!!timestamp"
-	seqTag       = "!!seq"
-	mapTag       = "!!map"
-	binaryTag    = "!!binary"
-	mergeTag     = "!!merge"
+	NullTag      = "!!null"
+	BoolTag      = "!!bool"
+	StrTag       = "!!str"
+	IntTag       = "!!int"
+	FloatTag     = "!!float"
+	TimestampTag = "!!timestamp"
+	SeqTag       = "!!seq"
+	MapTag       = "!!map"
+	BinaryTag    = "!!binary"
+	MergeTag     = "!!merge"
 )
 
 var longTags = make(map[string]string)
 var shortTags = make(map[string]string)
 
-func init() {
-	for _, stag := range []string{nullTag, boolTag, strTag, intTag, floatTag, timestampTag, seqTag, mapTag, binaryTag, mergeTag} {
-		ltag := longTag(stag)
-		longTags[stag] = ltag
-		shortTags[ltag] = stag
-	}
-}
-
 const longTagPrefix = "tag:yaml.org,2002:"
 
-func shortTag(tag string) string {
+func ShortTag(tag string) string {
 	if strings.HasPrefix(tag, longTagPrefix) {
 		if stag, ok := shortTags[tag]; ok {
 			return stag
 		}
-		return "!!" + tag[len(longTagPrefix):]
+		shortTags[tag] = "!!" + tag[len(longTagPrefix):]
+		return shortTags[tag]
 	}
 	return tag
 }
 
-func longTag(tag string) string {
+func LongTag(tag string) string {
 	if strings.HasPrefix(tag, "!!") {
 		if ltag, ok := longTags[tag]; ok {
 			return ltag
 		}
-		return longTagPrefix + tag[2:]
+		longTags[tag] = longTagPrefix + tag[2:]
+		return longTags[tag]
 	}
 	return tag
 }
 
 func resolvableTag(tag string) bool {
 	switch tag {
-	case "", strTag, boolTag, intTag, floatTag, nullTag, timestampTag:
+	case "", StrTag, BoolTag, IntTag, FloatTag, NullTag, TimestampTag:
 		return true
 	}
 	return false
@@ -124,31 +121,32 @@ func resolvableTag(tag string) bool {
 
 var yamlStyleFloat = regexp.MustCompile(`^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$`)
 
-func resolve(tag string, in string) (rtag string, out interface{}, errOut error) {
-	tag = shortTag(tag)
+func Resolve(tag string, in string) (rtag string, out interface{}, errOut error) {
+	initResolveOnce.Do(initResolve)
+	tag = ShortTag(tag)
 	if !resolvableTag(tag) {
 		return tag, in, nil
 	}
 
 	defer func() {
 		switch tag {
-		case "", rtag, strTag, binaryTag:
+		case "", rtag, StrTag, BinaryTag:
 			return
-		case floatTag:
-			if rtag == intTag {
+		case FloatTag:
+			if rtag == IntTag {
 				switch v := out.(type) {
 				case int64:
-					rtag = floatTag
+					rtag = FloatTag
 					out = float64(v)
 					return
 				case int:
-					rtag = floatTag
+					rtag = FloatTag
 					out = float64(v)
 					return
 				}
 			}
 		}
-		errOut = fmt.Errorf("yaml: cannot decode %s `%s` as a %s", shortTag(rtag), in, shortTag(tag))
+		errOut = fmt.Errorf("yaml: cannot decode %s `%s` as a %s", ShortTag(rtag), in, ShortTag(tag))
 	}()
 
 	// Any data is accepted as a !!str or !!binary.
@@ -157,7 +155,7 @@ func resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 	if in != "" {
 		hint = resolveTable[in[0]]
 	}
-	if hint != 0 && tag != strTag && tag != binaryTag {
+	if hint != 0 && tag != StrTag && tag != BinaryTag {
 		// Handle things we can lookup in a map.
 		if item, ok := resolveMap[in]; ok {
 			return item.tag, item.value, nil
@@ -176,7 +174,7 @@ func resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 			// Not in the map, so maybe a normal float.
 			floatv, err := strconv.ParseFloat(in, 64)
 			if err == nil {
-				return floatTag, floatv, nil
+				return FloatTag, floatv, nil
 				//return postResolve(tag, floatTag, floatv)
 			}
 
@@ -184,10 +182,10 @@ func resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 			// Int, float, or timestamp.
 			// Only try values as a timestamp if the value is unquoted or there's an explicit
 			// !!timestamp tag.
-			if tag == "" || tag == timestampTag {
+			if tag == "" || tag == TimestampTag {
 				t, ok := parseTimestamp(in)
 				if ok {
-					return timestampTag, t, nil
+					return TimestampTag, t, nil
 				}
 			}
 
@@ -195,41 +193,41 @@ func resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 			intv, err := strconv.ParseInt(plain, 0, 64)
 			if err == nil {
 				if intv == int64(int(intv)) {
-					return intTag, int(intv), nil
+					return IntTag, int(intv), nil
 				} else {
-					return intTag, intv, nil
+					return IntTag, intv, nil
 				}
 			}
 			uintv, err := strconv.ParseUint(plain, 0, 64)
 			if err == nil {
-				return intTag, uintv, nil
+				return IntTag, uintv, nil
 			}
 			if yamlStyleFloat.MatchString(plain) {
 				floatv, err := strconv.ParseFloat(plain, 64)
 				if err == nil {
-					return floatTag, floatv, nil
+					return FloatTag, floatv, nil
 				}
 			}
 			if strings.HasPrefix(plain, "0b") {
 				intv, err := strconv.ParseInt(plain[2:], 2, 64)
 				if err == nil {
 					if intv == int64(int(intv)) {
-						return intTag, int(intv), nil
+						return IntTag, int(intv), nil
 					} else {
-						return intTag, intv, nil
+						return IntTag, intv, nil
 					}
 				}
 				uintv, err := strconv.ParseUint(plain[2:], 2, 64)
 				if err == nil {
-					return intTag, uintv, nil
+					return IntTag, uintv, nil
 				}
 			} else if strings.HasPrefix(plain, "-0b") {
 				intv, err := strconv.ParseInt("-"+plain[3:], 2, 64)
 				if err == nil {
 					if true || intv == int64(int(intv)) {
-						return intTag, int(intv), nil
+						return IntTag, int(intv), nil
 					} else {
-						return intTag, intv, nil
+						return IntTag, intv, nil
 					}
 				}
 			}
@@ -241,22 +239,22 @@ func resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 				intv, err := strconv.ParseInt(plain[2:], 8, 64)
 				if err == nil {
 					if intv == int64(int(intv)) {
-						return intTag, int(intv), nil
+						return IntTag, int(intv), nil
 					} else {
-						return intTag, intv, nil
+						return IntTag, intv, nil
 					}
 				}
 				uintv, err := strconv.ParseUint(plain[2:], 8, 64)
 				if err == nil {
-					return intTag, uintv, nil
+					return IntTag, uintv, nil
 				}
 			} else if strings.HasPrefix(plain, "-0o") {
 				intv, err := strconv.ParseInt("-"+plain[3:], 8, 64)
 				if err == nil {
 					if true || intv == int64(int(intv)) {
-						return intTag, int(intv), nil
+						return IntTag, int(intv), nil
 					} else {
-						return intTag, intv, nil
+						return IntTag, intv, nil
 					}
 				}
 			}
@@ -264,12 +262,12 @@ func resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 			panic("internal error: missing handler for resolver table: " + string(rune(hint)) + " (with " + in + ")")
 		}
 	}
-	return strTag, in, nil
+	return StrTag, in, nil
 }
 
-// encodeBase64 encodes s as base64 that is broken up into multiple lines
+// EncodeBase64 encodes s as base64 that is broken up into multiple lines
 // as appropriate for the resulting length.
-func encodeBase64(s string) string {
+func EncodeBase64(s string) string {
 	const lineLen = 70
 	encLen := base64.StdEncoding.EncodedLen(len(s))
 	lines := encLen/lineLen + 1

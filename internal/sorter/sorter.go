@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package sorter
 
 import (
 	"reflect"
 	"unicode"
 )
 
-type keyList []reflect.Value
+type KeyList []reflect.Value
 
-func (l keyList) Len() int      { return len(l) }
-func (l keyList) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
-func (l keyList) Less(i, j int) bool {
+func (l KeyList) Len() int      { return len(l) }
+func (l KeyList) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+func (l KeyList) Less(i, j int) bool {
 	a := l[i]
 	b := l[j]
 	ak := a.Kind()

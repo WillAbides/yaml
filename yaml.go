@@ -21,8 +21,10 @@
 package yaml
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3/internal/resolve"
 	"io"
 	"reflect"
 	"strings"
@@ -89,7 +91,7 @@ func Unmarshal(in []byte, out interface{}) (err error) {
 
 // A Decoder reads and decodes YAML values from an input stream.
 type Decoder struct {
-	parser      *parser
+	parser      Parser
 	knownFields bool
 }
 
@@ -99,7 +101,7 @@ type Decoder struct {
 // data from r beyond the YAML values requested.
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
-		parser: newParserFromReader(r),
+		parser: NewParserFromReader(r),
 	}
 }
 
@@ -118,7 +120,7 @@ func (dec *Decoder) Decode(v interface{}) (errOut error) {
 	d := newDecoder()
 	d.knownFields = dec.knownFields
 	//defer handleErr(&errOut)
-	node, err := dec.parser.parse()
+	node, err := dec.parser.Parse()
 	if err != nil {
 		return err
 	}
@@ -161,11 +163,9 @@ func (n *Node) Decode(v interface{}) (errOut error) {
 }
 
 func unmarshal(in []byte, out interface{}, strict bool) (errOut error) {
-	//defer handleErr(&errOut)
 	d := newDecoder()
-	p := newParser(in)
-	defer p.destroy()
-	node, err := p.parse()
+	p := NewParser(in)
+	node, err := p.Parse()
 	if err != nil {
 		return err
 	}
@@ -228,43 +228,17 @@ func unmarshal(in []byte, out interface{}, strict bool) (errOut error) {
 //	yaml.Marshal(&T{B: 2}) // Returns "b: 2\n"
 //	yaml.Marshal(&T{F: 1}} // Returns "a: 1\nb: 0\n"
 func Marshal(in interface{}) (out []byte, errOut error) {
-	e := newEncoder()
-	defer e.destroy()
-	err := e.marshalDoc("", reflect.ValueOf(in))
+	var buf bytes.Buffer
+	e := NewEncoder(&buf)
+	err := e.Encode(in)
 	if err != nil {
 		return nil, err
 	}
-	err = e.finish()
+	err = e.Close()
 	if err != nil {
 		return nil, err
 	}
-	out = e.out
-	return
-}
-
-// An Encoder writes YAML values to an output stream.
-type Encoder struct {
-	encoder *encoder
-}
-
-// NewEncoder returns a new encoder that writes to w.
-// The Encoder should be closed after use to flush all data
-// to w.
-func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{
-		encoder: newEncoderWithWriter(w),
-	}
-}
-
-// Encode writes the YAML encoding of v to the stream.
-// If multiple items are encoded to the stream, the
-// second and subsequent document will be preceded
-// with a "---" document separator, but the first will not.
-//
-// See the documentation for Marshal for details about the conversion of Go
-// values to YAML.
-func (e *Encoder) Encode(v interface{}) (errOut error) {
-	return e.encoder.marshalDoc("", reflect.ValueOf(v))
+	return buf.Bytes(), nil
 }
 
 // Encode encodes value v and stores its representation in n.
@@ -272,39 +246,24 @@ func (e *Encoder) Encode(v interface{}) (errOut error) {
 // See the documentation for Marshal for details about the
 // conversion of Go values into YAML.
 func (n *Node) Encode(v interface{}) (errOut error) {
-	e := newEncoder()
-	defer e.destroy()
-	err := e.marshalDoc("", reflect.ValueOf(v))
+	var buf bytes.Buffer
+	e := NewEncoder(&buf)
+	err := e.Encode(v)
 	if err != nil {
 		return err
 	}
-	err = e.finish()
+	err = e.Close()
 	if err != nil {
 		return err
 	}
-	p := newParser(e.out)
-	p.textless = true
-	defer p.destroy()
-	doc, err := p.parse()
+	p := NewParser(buf.Bytes())
+	p.SetTextless(true)
+	doc, err := p.Parse()
 	if err != nil {
 		return err
 	}
 	*n = *doc.Content[0]
 	return nil
-}
-
-// SetIndent changes the used indentation used when encoding.
-func (e *Encoder) SetIndent(spaces int) {
-	if spaces < 0 {
-		panic("yaml: cannot indent to a negative number of spaces")
-	}
-	e.encoder.indent = spaces
-}
-
-// Close closes the encoder by writing any remaining data.
-// It does not write a stream terminating string "...".
-func (e *Encoder) Close() (err error) {
-	return e.encoder.finish()
 }
 
 // A TypeError is returned by Unmarshal when one or more fields in
@@ -423,7 +382,7 @@ func (n *Node) IsZero() bool {
 // the node. If the Tag field isn't explicitly defined, one will be computed
 // based on the node properties.
 func (n *Node) LongTag() string {
-	return longTag(n.ShortTag())
+	return resolve.LongTag(n.ShortTag())
 }
 
 // ShortTag returns the short form of the YAML tag that indicates data type for
@@ -431,20 +390,20 @@ func (n *Node) LongTag() string {
 // based on the node properties.
 func (n *Node) ShortTag() string {
 	if n.indicatedString() {
-		return strTag
+		return resolve.StrTag
 	}
 	if n.Tag == "" || n.Tag == "!" {
 		switch n.Kind {
 		case MappingNode:
-			return mapTag
+			return resolve.MapTag
 		case SequenceNode:
-			return seqTag
+			return resolve.SeqTag
 		case AliasNode:
 			if n.Alias != nil {
 				return n.Alias.ShortTag()
 			}
 		case ScalarNode:
-			tag, _, err := resolve("", n.Value)
+			tag, _, err := resolve.Resolve("", n.Value)
 			if err == nil {
 				panic(err)
 			}
@@ -452,17 +411,17 @@ func (n *Node) ShortTag() string {
 		case 0:
 			// Special case to make the zero value convenient.
 			if n.IsZero() {
-				return nullTag
+				return resolve.NullTag
 			}
 		}
 		return ""
 	}
-	return shortTag(n.Tag)
+	return resolve.ShortTag(n.Tag)
 }
 
 func (n *Node) indicatedString() bool {
 	return n.Kind == ScalarNode &&
-		(shortTag(n.Tag) == strTag ||
+		(resolve.ShortTag(n.Tag) == resolve.StrTag ||
 			(n.Tag == "" || n.Tag == "!") && n.Style&(SingleQuotedStyle|DoubleQuotedStyle|LiteralStyle|FoldedStyle) != 0)
 }
 
@@ -472,10 +431,10 @@ func (n *Node) SetString(s string) {
 	n.Kind = ScalarNode
 	if utf8.ValidString(s) {
 		n.Value = s
-		n.Tag = strTag
+		n.Tag = resolve.StrTag
 	} else {
-		n.Value = encodeBase64(s)
-		n.Tag = binaryTag
+		n.Value = resolve.EncodeBase64(s)
+		n.Tag = resolve.BinaryTag
 	}
 	if strings.Contains(n.Value, "\n") {
 		n.Style = LiteralStyle
