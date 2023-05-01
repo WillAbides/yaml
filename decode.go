@@ -921,7 +921,7 @@ func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 		}
 		if ok {
 			if mergedFields != nil {
-				if k.CanInterface() && comparableValue(k) {
+				if k.CanInterface() && k.Comparable() {
 					ki := k.Interface()
 					if mergedFields[ki] {
 						continue
@@ -958,41 +958,6 @@ func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 	d.stringMapType = stringMapType
 	d.generalMapType = generalMapType
 	return true, nil
-}
-
-// copied from stdlib reflect in go1.20. remove when we can depend on that.
-func comparableValue(v reflect.Value) bool {
-	k := v.Kind()
-	switch k {
-	case reflect.Invalid:
-		return false
-
-	case reflect.Array:
-		switch v.Type().Elem().Kind() {
-		case reflect.Interface, reflect.Array, reflect.Struct:
-			for i := 0; i < v.Type().Len(); i++ {
-				if !comparableValue(v.Index(i)) {
-					return false
-				}
-			}
-			return true
-		}
-		return v.Type().Comparable()
-
-	case reflect.Interface:
-		return comparableValue(v.Elem())
-
-	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
-			if !comparableValue(v.Field(i)) {
-				return false
-			}
-		}
-		return true
-
-	default:
-		return v.Type().Comparable()
-	}
 }
 
 func isStringMap(n *Node) bool {
