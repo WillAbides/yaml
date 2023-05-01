@@ -651,6 +651,8 @@ func yaml_parser_fetch_more_tokens(parser *YamlParser) error {
 }
 
 // The dispatcher for token fetchers.
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_fetch_next_token(parser *YamlParser) (errOut error) {
 	// Ensure that the buffer is initialized.
 	if parser.Unread < 1 {
@@ -2158,6 +2160,8 @@ func yaml_parser_scan_uri_escapes(parser *YamlParser, directive bool, start_mark
 }
 
 // Scan a block scalar.
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_scan_block_scalar(parser *YamlParser, literal bool) (*yamlh.YamlToken, error) {
 	// Eat the indicator '|' or '>'.
 	start_mark := parser.Mark
@@ -2438,6 +2442,8 @@ func yaml_parser_scan_block_scalar_breaks(parser *YamlParser, indent *int, break
 }
 
 // Scan a quoted scalar.
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_scan_flow_scalar(parser *YamlParser, single bool) (*yamlh.YamlToken, error) {
 	// Eat the left quote.
 	start_mark := parser.Mark
@@ -2691,6 +2697,8 @@ func yaml_parser_scan_flow_scalar(parser *YamlParser, single bool) (*yamlh.YamlT
 }
 
 // Scan a plain scalar.
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_scan_plain_scalar(parser *YamlParser) (*yamlh.YamlToken, error) {
 	var s, leading_break, trailing_breaks, whitespaces []byte
 	var leading_blanks bool
@@ -2906,6 +2914,7 @@ func yaml_parser_scan_line_comment(parser *YamlParser, token_mark yamlh.Position
 	return nil
 }
 
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) error {
 	token := parser.Tokens[len(parser.Tokens)-1]
 

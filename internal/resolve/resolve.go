@@ -125,6 +125,7 @@ func resolvableTag(tag string) bool {
 
 var yamlStyleFloat = regexp.MustCompile(`^[-+]?(\.\d+|\d+(\.\d*)?)([eE][-+]?\d+)?$`)
 
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func Resolve(tag, in string) (rtag string, out interface{}, errOut error) {
 	initResolveOnce.Do(initResolve)
 	tag = ShortTag(tag)

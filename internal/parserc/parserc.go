@@ -476,6 +476,8 @@ func yaml_parser_set_event_comments(parser *YamlParser, event *yamlh.Event) {
 // flow_content         ::= flow_collection | SCALAR
 //
 //	******
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_parse_node(parser *YamlParser, block, indentless_sequence bool) (*yamlh.Event, error) {
 	var event yamlh.Event
 	token, err := peek_token(parser)

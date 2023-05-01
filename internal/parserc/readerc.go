@@ -112,6 +112,8 @@ func yaml_parser_update_raw_buffer(parser *YamlParser) error {
 // Return true on success, false on failure.
 //
 // The length is supposed to be significantly less that the buffer size.
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_update_buffer(parser *YamlParser, length int) error {
 	if parser.Reader == nil {
 		panic("read handler must be set")

@@ -635,6 +635,7 @@ func (d *decoder) null(out reflect.Value) bool {
 	return false
 }
 
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 	var tag string
 	var resolved interface{}
@@ -847,6 +848,7 @@ func (d *decoder) sequence(n *Node, out reflect.Value) (bool, error) {
 	return true, nil
 }
 
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 	l := len(n.Content)
 	if d.uniqueKeys {
