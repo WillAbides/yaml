@@ -18,7 +18,6 @@ package yaml_test
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 
@@ -924,13 +923,14 @@ var nodeTests = []struct {
 				Line:   1,
 				Column: 1,
 				Tag:    "!!map",
-				Content: []*yaml.Node{{
-					Kind:   yaml.ScalarNode,
-					Value:  "a",
-					Tag:    "!!str",
-					Line:   1,
-					Column: 1,
-				},
+				Content: []*yaml.Node{
+					{
+						Kind:   yaml.ScalarNode,
+						Value:  "a",
+						Tag:    "!!str",
+						Line:   1,
+						Column: 1,
+					},
 					saveNode("x", &yaml.Node{
 						Kind:   yaml.ScalarNode,
 						Value:  "1",
@@ -960,30 +960,33 @@ var nodeTests = []struct {
 						Tag:    "!!str",
 						Line:   3,
 						Column: 1,
-					}, {
+					},
+					{
 						Kind:   yaml.AliasNode,
 						Value:  "x",
 						Alias:  dropNode("x"),
 						Line:   3,
 						Column: 4,
-					}, {
+					},
+					{
 						Kind:   yaml.ScalarNode,
 						Value:  "d",
 						Tag:    "!!str",
 						Line:   4,
 						Column: 1,
-					}, {
+					},
+					{
 						Kind:   yaml.AliasNode,
 						Value:  "y",
 						Tag:    "",
 						Alias:  dropNode("y"),
 						Line:   4,
 						Column: 4,
-					}},
+					},
+				},
 			}},
 		},
 	}, {
-
 		yaml: "# One\n# Two\ntrue # Three\n# Four\n# Five\n",
 		node: yaml.Node{
 			Kind:   yaml.DocumentNode,
@@ -1001,7 +1004,6 @@ var nodeTests = []struct {
 			}},
 		},
 	}, {
-
 		yaml: "# š\ntrue # š\n",
 		node: yaml.Node{
 			Kind:   yaml.DocumentNode,
@@ -1018,7 +1020,6 @@ var nodeTests = []struct {
 			}},
 		},
 	}, {
-
 		yaml: "[decode]\n# One\n\n# Two\n\n# Three\ntrue # Four\n# Five\n\n# Six\n\n# Seven\n",
 		node: yaml.Node{
 			Kind:        yaml.DocumentNode,
@@ -2512,101 +2513,45 @@ var nodeTests = []struct {
 				}},
 			}},
 		},
+	}, {
+		yaml: "# DH1\n\n# DH2\n\n# HA1\n# HA2\n- &x la # IA\n# FA1\n# FA2\n\n# HB1\n# HB2\n- *x # IB\n# FB1\n# FB2\n\n# DF1\n\n# DF2\n",
+		node: yaml.Node{
+			Kind:        yaml.DocumentNode,
+			Line:        7,
+			Column:      1,
+			HeadComment: "# DH1\n\n# DH2",
+			FootComment: "# DF1\n\n# DF2",
+			Content: []*yaml.Node{{
+				Kind:   yaml.SequenceNode,
+				Tag:    "!!seq",
+				Line:   7,
+				Column: 1,
+				Content: []*yaml.Node{
+					saveNode("x", &yaml.Node{
+						Kind:        yaml.ScalarNode,
+						Tag:         "!!str",
+						Line:        7,
+						Column:      3,
+						Value:       "la",
+						HeadComment: "# HA1\n# HA2",
+						LineComment: "# IA",
+						FootComment: "# FA1\n# FA2",
+						Anchor:      "x",
+					}), {
+						Kind:        yaml.AliasNode,
+						Line:        13,
+						Column:      3,
+						Value:       "x",
+						Alias:       dropNode("x"),
+						HeadComment: "# HB1\n# HB2",
+						LineComment: "# IB",
+						FootComment: "# FB1\n# FB2",
+					},
+				},
+			}},
+		},
 	},
-	//}, {
-	//	yaml: "# DH1\n\n# DH2\n\n# HA1\n# HA2\n- &x la # IA\n# FA1\n# FA2\n\n# HB1\n# HB2\n- *x # IB\n# FB1\n# FB2\n\n# DF1\n\n# DF2\n",
-	//	node: yaml.Node{
-	//		Kind:        yaml.DocumentNode,
-	//		Line:        7,
-	//		Column:      1,
-	//		HeadComment: "# DH1\n\n# DH2",
-	//		FootComment: "# DF1\n\n# DF2",
-	//		Content: []*yaml.Node{{
-	//			Kind:   yaml.SequenceNode,
-	//			Tag:    "!!seq",
-	//			Line:   7,
-	//			Column: 1,
-	//			Content: []*yaml.Node{
-	//				saveNode("x", &yaml.Node{
-	//					Kind:        yaml.ScalarNode,
-	//					Tag:         "!!str",
-	//					Line:        7,
-	//					Column:      3,
-	//					Value:       "la",
-	//					HeadComment: "# HA1\n# HA2",
-	//					LineComment: "# IA",
-	//					FootComment: "# FA1\n# FA2",
-	//					Anchor:      "x",
-	//				}), {
-	//					Kind:        yaml.AliasNode,
-	//					Line:        13,
-	//					Column:      3,
-	//					Value:       "x",
-	//					Alias:       dropNode("x"),
-	//					HeadComment: "# HB1\n# HB2",
-	//					LineComment: "# IB",
-	//					FootComment: "# FB1\n# FB2",
-	//				},
-	//			},
-	//		}},
-	//	},
-	//},
 }
-
-var lpattern = "  expected comments:\n%s"
-
-//func (s *S) TestNodeRoundtrip(c *C) {
-//	defer os.Setenv("TZ", os.Getenv("TZ"))
-//	os.Setenv("TZ", "UTC")
-//	for i, item := range nodeTests {
-//		c.Logf("test %d: %q", i, item.yaml)
-//
-//		if strings.Contains(item.yaml, "#") {
-//			var buf bytes.Buffer
-//			fprintComments(&buf, &item.node, "    ")
-//			c.Logf(lpattern, buf.Bytes())
-//		}
-//
-//		decode := true
-//		encode := true
-//
-//		testYaml := item.yaml
-//		if s := strings.TrimPrefix(testYaml, "[decode]"); s != testYaml {
-//			encode = false
-//			testYaml = s
-//		}
-//		if s := strings.TrimPrefix(testYaml, "[encode]"); s != testYaml {
-//			decode = false
-//			testYaml = s
-//		}
-//
-//		if decode {
-//			var node yaml.Node
-//			err := yaml.Unmarshal([]byte(testYaml), &node)
-//			c.Assert(err, IsNil)
-//			if strings.Contains(item.yaml, "#") {
-//				var buf bytes.Buffer
-//				fprintComments(&buf, &node, "    ")
-//				c.Logf("  obtained comments:\n%s", buf.Bytes())
-//			}
-//			c.Assert(&node, DeepEquals, &item.node)
-//		}
-//		if encode {
-//			node := deepCopyNode(&item.node, nil)
-//			buf := bytes.Buffer{}
-//			enc := yaml.NewEncoder(&buf)
-//			enc.SetIndent(2)
-//			err := enc.Encode(node)
-//			c.Assert(err, IsNil)
-//			err = enc.Close()
-//			c.Assert(err, IsNil)
-//			c.Assert(buf.String(), Equals, testYaml)
-//
-//			// Ensure there were no mutations to the tree.
-//			c.Assert(node, DeepEquals, &item.node)
-//		}
-//	}
-//}
 
 func TestNodeRoundtrip(t *testing.T) {
 	for i, item := range nodeTests {
@@ -2670,10 +2615,6 @@ var savedNodes = make(map[string]*yaml.Node)
 func saveNode(name string, node *yaml.Node) *yaml.Node {
 	savedNodes[name] = node
 	return node
-}
-
-func peekNode(name string) *yaml.Node {
-	return savedNodes[name]
 }
 
 func dropNode(name string) *yaml.Node {
@@ -2885,41 +2826,4 @@ func TestNodeOmitEmpty(t *testing.T) {
 	v.B.Line = 1
 	_, err = yaml.Marshal(&v)
 	require.Error(t, err)
-}
-
-func fprintComments(out io.Writer, node *yaml.Node, indent string) {
-	switch node.Kind {
-	case yaml.ScalarNode:
-		fmt.Fprintf(out, "%s<%s> ", indent, node.Value)
-		fprintCommentSet(out, node)
-		fmt.Fprintf(out, "\n")
-	case yaml.DocumentNode:
-		fmt.Fprintf(out, "%s<DOC> ", indent)
-		fprintCommentSet(out, node)
-		fmt.Fprintf(out, "\n")
-		for i := 0; i < len(node.Content); i++ {
-			fprintComments(out, node.Content[i], indent+"  ")
-		}
-	case yaml.MappingNode:
-		fmt.Fprintf(out, "%s<MAP> ", indent)
-		fprintCommentSet(out, node)
-		fmt.Fprintf(out, "\n")
-		for i := 0; i < len(node.Content); i += 2 {
-			fprintComments(out, node.Content[i], indent+"  ")
-			fprintComments(out, node.Content[i+1], indent+"  ")
-		}
-	case yaml.SequenceNode:
-		fmt.Fprintf(out, "%s<SEQ> ", indent)
-		fprintCommentSet(out, node)
-		fmt.Fprintf(out, "\n")
-		for i := 0; i < len(node.Content); i++ {
-			fprintComments(out, node.Content[i], indent+"  ")
-		}
-	}
-}
-
-func fprintCommentSet(out io.Writer, node *yaml.Node) {
-	if len(node.HeadComment)+len(node.LineComment)+len(node.FootComment) > 0 {
-		fmt.Fprintf(out, "%q / %q / %q", node.HeadComment, node.LineComment, node.FootComment)
-	}
 }

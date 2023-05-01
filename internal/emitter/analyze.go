@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	"github.com/willabides/yaml/internal/yamlh"
 )
 
@@ -13,8 +14,7 @@ func analyzeAnchor(e *Emitter, anchor []byte, alias bool) error {
 		if alias {
 			problem = "alias value must not be empty"
 		}
-		return fmt.Errorf(problem)
-
+		return errors.New(problem)
 	}
 	for i := 0; i < len(anchor); i += yamlh.Width(anchor[i]) {
 		if !yamlh.Is_alpha(anchor, i) {
@@ -22,7 +22,7 @@ func analyzeAnchor(e *Emitter, anchor []byte, alias bool) error {
 			if alias {
 				problem = "alias value must contain alphanumerical characters only"
 			}
-			return fmt.Errorf(problem)
+			return errors.New(problem)
 		}
 	}
 	e.anchorData.Anchor = anchor
@@ -76,141 +76,120 @@ func analyzeTagDirective(tag_directive *yamlh.TagDirective) error {
 	return nil
 }
 
-func analyzeScalar(e *Emitter, value []byte) {
-	var block_indicators, flow_indicators, line_breaks, special_characters, tab_characters bool
-	var leading_space, leading_break, trailing_space, trailing_break, break_space, space_break bool
-	var preceded_by_whitespace, followed_by_whitespace, previous_space, previous_break bool
-
-	e.scalarData.value = value
-
+func analyzeScalar(value []byte) scalarData {
 	if len(value) == 0 {
-		e.scalarData.multiline = false
-		e.scalarData.flowPlainAllowed = false
-		e.scalarData.blockPlainAllowed = true
-		e.scalarData.singleQuotedAllowed = true
-		e.scalarData.blockAllowed = false
-		return
+		return scalarData{
+			value:               value,
+			blockPlainAllowed:   true,
+			singleQuotedAllowed: true,
+		}
 	}
 
-	if len(value) >= 3 && ((value[0] == '-' && value[1] == '-' && value[2] == '-') || (value[0] == '.' && value[1] == '.' && value[2] == '.')) {
-		block_indicators = true
-		flow_indicators = true
+	sd := scalarData{
+		value:               value,
+		blockPlainAllowed:   true,
+		flowPlainAllowed:    true,
+		singleQuotedAllowed: true,
+		blockAllowed:        true,
 	}
 
-	preceded_by_whitespace = true
-	for i, w := 0, 0; i < len(value); i += w {
-		w = yamlh.Width(value[i])
-		followed_by_whitespace = i+w >= len(value) || yamlh.Is_blank(value, i+w)
+	if len(value) >= 3 {
+		if bytes.Equal(value[:3], []byte("---")) || bytes.Equal(value[:3], []byte("...")) {
+			sd.blockPlainAllowed = false
+			sd.flowPlainAllowed = false
+		}
+	}
 
-		if i == 0 {
-			switch value[i] {
-			case '#', ',', '[', ']', '{', '}', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`':
-				flow_indicators = true
-				block_indicators = true
+	prevWhitespace := true
+	var prevSpace, prevBreak bool
+	first := true
+	for len(value) > 0 {
+		w := yamlh.Width(value[0])
+		char := value[0]
+		nextChar := byte(0)
+		if len(value) > w {
+			nextChar = value[w]
+		}
+		last := w >= len(value)
+		nextWhitespace := last || yamlh.IsBlank(nextChar)
+
+		if first {
+			switch char {
+			case '#', ',', '[', ']', '{', '}', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`', ' ':
+				sd.flowPlainAllowed = false
+				sd.blockPlainAllowed = false
 			case '?', ':':
-				flow_indicators = true
-				if followed_by_whitespace {
-					block_indicators = true
+				sd.flowPlainAllowed = false
+				if nextWhitespace {
+					sd.blockPlainAllowed = false
 				}
 			case '-':
-				if followed_by_whitespace {
-					flow_indicators = true
-					block_indicators = true
+				if nextWhitespace {
+					sd.flowPlainAllowed = false
+					sd.blockPlainAllowed = false
 				}
 			}
+			first = false
 		} else {
-			switch value[i] {
+			switch char {
 			case ',', '?', '[', ']', '{', '}':
-				flow_indicators = true
+				sd.flowPlainAllowed = false
 			case ':':
-				flow_indicators = true
-				if followed_by_whitespace {
-					block_indicators = true
+				sd.flowPlainAllowed = false
+				if nextWhitespace {
+					sd.blockPlainAllowed = false
 				}
 			case '#':
-				if preceded_by_whitespace {
-					flow_indicators = true
-					block_indicators = true
+				if prevWhitespace {
+					sd.flowPlainAllowed = false
+					sd.blockPlainAllowed = false
 				}
 			}
 		}
 
-		if value[i] == '\t' {
-			tab_characters = true
-		} else if !yamlh.Is_printable(value, i) {
-			special_characters = true
-		}
-		if yamlh.Is_space(value, i) {
-			if i == 0 {
-				leading_space = true
-			}
-			if i+yamlh.Width(value[i]) == len(value) {
-				trailing_space = true
-			}
-			if previous_break {
-				break_space = true
-			}
-			previous_space = true
-			previous_break = false
-		} else if yamlh.Is_break(value, i) {
-			line_breaks = true
-			if i == 0 {
-				leading_break = true
-			}
-			if i+yamlh.Width(value[i]) == len(value) {
-				trailing_break = true
-			}
-			if previous_space {
-				space_break = true
-			}
-			previous_space = false
-			previous_break = true
-		} else {
-			previous_space = false
-			previous_break = false
+		if char == '\t' {
+			sd.blockPlainAllowed = false
+			sd.singleQuotedAllowed = false
+		} else if !yamlh.IsPrintable(value) {
+			sd.flowPlainAllowed = false
+			sd.blockPlainAllowed = false
+			sd.singleQuotedAllowed = false
+			sd.blockAllowed = false
 		}
 
+		switch {
+		case char == ' ':
+			if last {
+				sd.blockPlainAllowed = false
+				sd.flowPlainAllowed = false
+				sd.blockAllowed = false
+			}
+			if prevBreak {
+				sd.blockPlainAllowed = false
+				sd.singleQuotedAllowed = false
+				sd.flowPlainAllowed = false
+			}
+			prevSpace = true
+			prevBreak = false
+		case yamlh.IsBreak(value):
+			sd.multiline = true
+			sd.blockPlainAllowed = false
+			sd.flowPlainAllowed = false
+			if prevSpace {
+				sd.singleQuotedAllowed = false
+				sd.blockAllowed = false
+			}
+			prevSpace = false
+			prevBreak = true
+		default:
+			prevSpace = false
+			prevBreak = false
+		}
 		// [Go]: Why 'z'? Couldn't be the end of the string as that's the loop condition.
-		preceded_by_whitespace = yamlh.Is_blankz(value, i)
+		prevWhitespace = yamlh.IsBlankz(value)
+		value = value[w:]
 	}
-
-	e.scalarData.multiline = line_breaks
-	e.scalarData.flowPlainAllowed = true
-	e.scalarData.blockPlainAllowed = true
-	e.scalarData.singleQuotedAllowed = true
-	e.scalarData.blockAllowed = true
-
-	if leading_space || leading_break || trailing_space || trailing_break {
-		e.scalarData.flowPlainAllowed = false
-		e.scalarData.blockPlainAllowed = false
-	}
-	if trailing_space {
-		e.scalarData.blockAllowed = false
-	}
-	if break_space {
-		e.scalarData.flowPlainAllowed = false
-		e.scalarData.blockPlainAllowed = false
-		e.scalarData.singleQuotedAllowed = false
-	}
-	if space_break || tab_characters || special_characters {
-		e.scalarData.flowPlainAllowed = false
-		e.scalarData.blockPlainAllowed = false
-		e.scalarData.singleQuotedAllowed = false
-	}
-	if space_break || special_characters {
-		e.scalarData.blockAllowed = false
-	}
-	if line_breaks {
-		e.scalarData.flowPlainAllowed = false
-		e.scalarData.blockPlainAllowed = false
-	}
-	if flow_indicators {
-		e.scalarData.flowPlainAllowed = false
-	}
-	if block_indicators {
-		e.scalarData.blockPlainAllowed = false
-	}
-	return
+	return sd
 }
 
 func analyzeEvent(e *Emitter, event *yamlh.Event) error {
@@ -251,7 +230,7 @@ func analyzeEvent(e *Emitter, event *yamlh.Event) error {
 				return err
 			}
 		}
-		analyzeScalar(e, event.Value)
+		e.scalarData = analyzeScalar(event.Value)
 	case yamlh.SEQUENCE_START_EVENT, yamlh.MAPPING_START_EVENT:
 		if len(event.Anchor) > 0 {
 			err = analyzeAnchor(e, event.Anchor, true)

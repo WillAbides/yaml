@@ -20,13 +20,14 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
-	"github.com/willabides/yaml/internal/parserc"
-	"github.com/willabides/yaml/internal/resolve"
-	"github.com/willabides/yaml/internal/yamlh"
 	"io"
 	"math"
 	"reflect"
 	"time"
+
+	"github.com/willabides/yaml/internal/parserc"
+	"github.com/willabides/yaml/internal/resolve"
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 // ----------------------------------------------------------------------------
@@ -147,13 +148,18 @@ func (p *parser) Parse() (*Node, error) {
 
 func (p *parser) node(kind Kind, defaultTag, tag, value string) (*Node, error) {
 	var style Style
-	var err error
+	tagIsSet := false
 	if tag != "" && tag != "!" {
 		tag = resolve.ShortTag(tag)
 		style = TaggedStyle
-	} else if defaultTag != "" {
+		tagIsSet = true
+	}
+	if !tagIsSet && defaultTag != "" {
 		tag = defaultTag
-	} else if kind == ScalarNode {
+		tagIsSet = true
+	}
+	if !tagIsSet && kind == ScalarNode {
+		var err error
 		tag, _, err = resolve.Resolve("", value)
 		if err != nil {
 			return nil, err
@@ -229,7 +235,7 @@ func (p *parser) alias() (*Node, error) {
 }
 
 func (p *parser) scalar() (*Node, error) {
-	var parsedStyle = p.event.Scalar_style()
+	parsedStyle := p.event.Scalar_style()
 	var nodeStyle Style
 	switch {
 	case parsedStyle&yamlh.DOUBLE_QUOTED_SCALAR_STYLE != 0:
@@ -241,8 +247,8 @@ func (p *parser) scalar() (*Node, error) {
 	case parsedStyle&yamlh.FOLDED_SCALAR_STYLE != 0:
 		nodeStyle = FoldedStyle
 	}
-	var nodeValue = string(p.event.Value)
-	var nodeTag = string(p.event.Tag)
+	nodeValue := string(p.event.Value)
+	nodeTag := string(p.event.Tag)
 	var defaultTag string
 	if nodeStyle == 0 {
 		if nodeValue == "<<" {
@@ -278,7 +284,8 @@ func (p *parser) sequence() (*Node, error) {
 		return nil, err
 	}
 	for {
-		nextEvent, err := p.peek()
+		var nextEvent yamlh.EventType
+		nextEvent, err = p.peek()
 		if err != nil {
 			return nil, err
 		}
@@ -315,7 +322,8 @@ func (p *parser) mapping() (*Node, error) {
 		return nil, err
 	}
 	for {
-		nextEvent, err := p.peek()
+		var nextEvent yamlh.EventType
+		nextEvent, err = p.peek()
 		if err != nil {
 			return nil, err
 		}
@@ -323,7 +331,8 @@ func (p *parser) mapping() (*Node, error) {
 			break
 		}
 
-		k, err := p.parseChild(n)
+		var k *Node
+		k, err = p.parseChild(n)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +343,8 @@ func (p *parser) mapping() (*Node, error) {
 				k.FootComment = ""
 			}
 		}
-		v, err := p.parseChild(n)
+		var v *Node
+		v, err = p.parseChild(n)
 		if err != nil {
 			return nil, err
 		}
@@ -395,8 +405,6 @@ var (
 	stringMapType  = reflect.TypeOf(map[string]interface{}{})
 	generalMapType = reflect.TypeOf(map[interface{}]interface{}{})
 	ifaceType      = generalMapType.Elem()
-	timeType       = reflect.TypeOf(time.Time{})
-	ptrTimeType    = reflect.TypeOf(&time.Time{})
 )
 
 func newDecoder() *decoder {
@@ -438,9 +446,9 @@ func (d *decoder) callUnmarshaler(n *Node, u Unmarshaler) (bool, error) {
 
 func (d *decoder) callObsoleteUnmarshaler(n *Node, u obsoleteUnmarshaler) (bool, error) {
 	terrlen := len(d.typeErrors)
-	err := u.UnmarshalYAML(func(v interface{}) (err error) {
-		_, uErr := d.unmarshal(n, reflect.ValueOf(v))
-		if uErr != nil {
+	err := u.UnmarshalYAML(func(v interface{}) error {
+		_, err := d.unmarshal(n, reflect.ValueOf(v))
+		if err != nil {
 			return err
 		}
 		if len(d.typeErrors) > terrlen {
@@ -616,14 +624,6 @@ func (d *decoder) alias(n *Node, out reflect.Value) (bool, error) {
 	return good, nil
 }
 
-var zeroValue reflect.Value
-
-func resetMap(out reflect.Value) {
-	for _, k := range out.MapKeys() {
-		out.SetMapIndex(k, zeroValue)
-	}
-}
-
 func (d *decoder) null(out reflect.Value) bool {
 	if out.CanAddr() {
 		switch out.Kind() {
@@ -635,6 +635,7 @@ func (d *decoder) null(out reflect.Value) bool {
 	return false
 }
 
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 	var tag string
 	var resolved interface{}
@@ -648,7 +649,8 @@ func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 			return false, err
 		}
 		if tag == resolve.BinaryTag {
-			data, err := base64.StdEncoding.DecodeString(resolved.(string))
+			var data []byte
+			data, err = base64.StdEncoding.DecodeString(resolved.(string))
 			if err != nil {
 				return false, fmt.Errorf("yaml: !!binary value contains invalid base64 data")
 			}
@@ -742,8 +744,8 @@ func (d *decoder) scalar(n *Node, out reflect.Value) (bool, error) {
 				return true, nil
 			}
 		case uint64:
-			if !out.OverflowUint(uint64(resolved)) {
-				out.SetUint(uint64(resolved))
+			if !out.OverflowUint(resolved) {
+				out.SetUint(resolved)
 				return true, nil
 			}
 		case float64:
@@ -846,6 +848,7 @@ func (d *decoder) sequence(n *Node, out reflect.Value) (bool, error) {
 	return true, nil
 }
 
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 	l := len(n.Content)
 	if d.uniqueKeys {
@@ -918,11 +921,13 @@ func (d *decoder) mapping(n *Node, out reflect.Value) (bool, error) {
 		}
 		if ok {
 			if mergedFields != nil {
-				ki := k.Interface()
-				if mergedFields[ki] {
-					continue
+				if k.CanInterface() && k.Comparable() {
+					ki := k.Interface()
+					if mergedFields[ki] {
+						continue
+					}
+					mergedFields[ki] = true
 				}
-				mergedFields[ki] = true
 			}
 			kkind := k.Kind()
 			if kkind == reflect.Interface {
@@ -1063,7 +1068,7 @@ func (d *decoder) mappingStruct(n *Node, out reflect.Value) (bool, error) {
 	return true, nil
 }
 
-func (d *decoder) merge(parent *Node, merge *Node, out reflect.Value) error {
+func (d *decoder) merge(parent, merge *Node, out reflect.Value) error {
 	mergedFields := d.mergedFields
 	if mergedFields == nil {
 		d.mergedFields = make(map[interface{}]bool)

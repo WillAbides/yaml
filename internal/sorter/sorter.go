@@ -24,6 +24,8 @@ type KeyList []reflect.Value
 
 func (l KeyList) Len() int      { return len(l) }
 func (l KeyList) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func (l KeyList) Less(i, j int) bool {
 	a := l[i]
 	b := l[j]

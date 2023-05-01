@@ -24,12 +24,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/willabides/yaml/internal/resolve"
 	"io"
 	"reflect"
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/willabides/yaml/internal/resolve"
 )
 
 // The Unmarshaler interface may be implemented by types to customize their
@@ -119,7 +120,6 @@ func (dec *Decoder) KnownFields(enable bool) {
 func (dec *Decoder) Decode(v interface{}) (errOut error) {
 	d := newDecoder()
 	d.knownFields = dec.knownFields
-	//defer handleErr(&errOut)
 	node, err := dec.parser.Parse()
 	if err != nil {
 		return err
@@ -132,27 +132,6 @@ func (dec *Decoder) Decode(v interface{}) (errOut error) {
 		out = out.Elem()
 	}
 	_, err = d.unmarshal(node, out)
-	if err != nil {
-		return err
-	}
-	if len(d.typeErrors) > 0 {
-		return &TypeError{d.typeErrors}
-	}
-	return nil
-}
-
-// Decode decodes the node and stores its data into the value pointed to by v.
-//
-// See the documentation for Unmarshal for details about the
-// conversion of YAML into a Go value.
-func (n *Node) Decode(v interface{}) (errOut error) {
-	d := newDecoder()
-	//defer handleErr(&errOut)
-	out := reflect.ValueOf(v)
-	if out.Kind() == reflect.Ptr && !out.IsNil() {
-		out = out.Elem()
-	}
-	_, err := d.unmarshal(n, out)
 	if err != nil {
 		return err
 	}
@@ -241,64 +220,6 @@ func Marshal(in interface{}) (out []byte, errOut error) {
 	return buf.Bytes(), nil
 }
 
-// Encode encodes value v and stores its representation in n.
-//
-// See the documentation for Marshal for details about the
-// conversion of Go values into YAML.
-func (n *Node) Encode(v interface{}) (errOut error) {
-	var buf bytes.Buffer
-	e := NewEncoder(&buf)
-	err := e.Encode(v)
-	if err != nil {
-		return err
-	}
-	err = e.Close()
-	if err != nil {
-		return err
-	}
-	p := NewParser(buf.Bytes())
-	p.SetTextless(true)
-	doc, err := p.Parse()
-	if err != nil {
-		return err
-	}
-	*n = *doc.Content[0]
-	return nil
-}
-
-// A TypeError is returned by Unmarshal when one or more fields in
-// the YAML document cannot be properly decoded into the requested
-// types. When this error is returned, the value is still
-// unmarshaled partially.
-type TypeError struct {
-	Errors []string
-}
-
-func (e *TypeError) Error() string {
-	return fmt.Sprintf("yaml: unmarshal errors:\n  %s", strings.Join(e.Errors, "\n  "))
-}
-
-type Kind uint32
-
-const (
-	DocumentNode Kind = 1 << iota
-	SequenceNode
-	MappingNode
-	ScalarNode
-	AliasNode
-)
-
-type Style uint32
-
-const (
-	TaggedStyle Style = 1 << iota
-	DoubleQuotedStyle
-	SingleQuotedStyle
-	LiteralStyle
-	FoldedStyle
-	FlowStyle
-)
-
 // Node represents an element in the YAML document hierarchy. While documents
 // are typically encoded and decoded into higher level types, such as structs
 // and maps, Node is an intermediate representation that allows detailed
@@ -371,6 +292,84 @@ type Node struct {
 	Line   int
 	Column int
 }
+
+// Decode decodes the node and stores its data into the value pointed to by v.
+//
+// See the documentation for Unmarshal for details about the
+// conversion of YAML into a Go value.
+func (n *Node) Decode(v interface{}) (errOut error) {
+	d := newDecoder()
+	out := reflect.ValueOf(v)
+	if out.Kind() == reflect.Ptr && !out.IsNil() {
+		out = out.Elem()
+	}
+	_, err := d.unmarshal(n, out)
+	if err != nil {
+		return err
+	}
+	if len(d.typeErrors) > 0 {
+		return &TypeError{Errors: d.typeErrors}
+	}
+	return nil
+}
+
+// Encode encodes value v and stores its representation in n.
+//
+// See the documentation for Marshal for details about the
+// conversion of Go values into YAML.
+func (n *Node) Encode(v interface{}) (errOut error) {
+	var buf bytes.Buffer
+	e := NewEncoder(&buf)
+	err := e.Encode(v)
+	if err != nil {
+		return err
+	}
+	err = e.Close()
+	if err != nil {
+		return err
+	}
+	p := NewParser(buf.Bytes())
+	p.SetTextless(true)
+	doc, err := p.Parse()
+	if err != nil {
+		return err
+	}
+	*n = *doc.Content[0]
+	return nil
+}
+
+// A TypeError is returned by Unmarshal when one or more fields in
+// the YAML document cannot be properly decoded into the requested
+// types. When this error is returned, the value is still
+// unmarshaled partially.
+type TypeError struct {
+	Errors []string
+}
+
+func (e *TypeError) Error() string {
+	return fmt.Sprintf("yaml: unmarshal errors:\n  %s", strings.Join(e.Errors, "\n  "))
+}
+
+type Kind uint32
+
+const (
+	DocumentNode Kind = 1 << iota
+	SequenceNode
+	MappingNode
+	ScalarNode
+	AliasNode
+)
+
+type Style uint32
+
+const (
+	TaggedStyle Style = 1 << iota
+	DoubleQuotedStyle
+	SingleQuotedStyle
+	LiteralStyle
+	FoldedStyle
+	FlowStyle
+)
 
 // IsZero returns whether the node has all of its fields unset.
 func (n *Node) IsZero() bool {
@@ -474,9 +473,11 @@ type fieldInfo struct {
 	Inline []int
 }
 
-var structMap = make(map[reflect.Type]*structInfo)
-var fieldMapMutex sync.RWMutex
-var unmarshalerType reflect.Type
+var (
+	structMap       = make(map[reflect.Type]*structInfo)
+	fieldMapMutex   sync.RWMutex
+	unmarshalerType reflect.Type
+)
 
 func init() {
 	var v Unmarshaler
@@ -505,7 +506,7 @@ func getStructInfo(st reflect.Type) (*structInfo, error) {
 		info := fieldInfo{Num: i}
 
 		tag := field.Tag.Get("yaml")
-		if tag == "" && strings.Index(string(field.Tag), ":") < 0 {
+		if tag == "" && !strings.Contains(string(field.Tag), ":") {
 			tag = string(field.Tag)
 		}
 		if tag == "-" {
@@ -524,7 +525,7 @@ func getStructInfo(st reflect.Type) (*structInfo, error) {
 				case "inline":
 					inline = true
 				default:
-					return nil, errors.New(fmt.Sprintf("unsupported flag %q in tag %q of type %s", flag, tag, st))
+					return nil, fmt.Errorf("unsupported flag %q in tag %q of type %s", flag, tag, st)
 				}
 			}
 			tag = fields[0]
@@ -551,7 +552,8 @@ func getStructInfo(st reflect.Type) (*structInfo, error) {
 				if reflect.PtrTo(ftype).Implements(unmarshalerType) {
 					inlineUnmarshalers = append(inlineUnmarshalers, []int{i})
 				} else {
-					sinfo, err := getStructInfo(ftype)
+					var err error
+					sinfo, err = getStructInfo(ftype)
 					if err != nil {
 						return nil, err
 					}
@@ -559,7 +561,8 @@ func getStructInfo(st reflect.Type) (*structInfo, error) {
 						inlineUnmarshalers = append(inlineUnmarshalers, append([]int{i}, index...))
 					}
 					for _, finfo := range sinfo.FieldsList {
-						if _, found := fieldsMap[finfo.Key]; found {
+						_, ok := fieldsMap[finfo.Key]
+						if ok {
 							msg := "duplicated key '" + finfo.Key + "' in struct " + st.String()
 							return nil, errors.New(msg)
 						}
@@ -626,7 +629,7 @@ func isZero(v reflect.Value) bool {
 	}
 	switch kind {
 	case reflect.String:
-		return len(v.String()) == 0
+		return v.String() == ""
 	case reflect.Interface, reflect.Ptr:
 		return v.IsNil()
 	case reflect.Slice:

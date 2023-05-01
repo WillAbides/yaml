@@ -96,7 +96,8 @@ func processHeadComment(e *Emitter) error {
 		if err != nil {
 			return err
 		}
-		if err = writeComment(e, e.tailComment); err != nil {
+		err = writeComment(e, e.tailComment)
+		if err != nil {
 			return err
 		}
 		e.tailComment = e.tailComment[:0]

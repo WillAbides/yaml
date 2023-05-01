@@ -43,45 +43,59 @@ var unmarshalTests = []struct {
 	},
 	{
 		data: "{}", value: &struct{}{},
-	}, {
+	},
+	{
 		data:  "v: hi",
 		value: map[string]string{"v": "hi"},
-	}, {
+	},
+	{
 		data: "v: hi", value: map[string]interface{}{"v": "hi"},
-	}, {
+	},
+	{
 		data:  "v: true",
 		value: map[string]string{"v": "true"},
-	}, {
+	},
+	{
 		data:  "v: true",
 		value: map[string]interface{}{"v": true},
-	}, {
+	},
+	{
 		data:  "v: 10",
 		value: map[string]interface{}{"v": 10},
-	}, {
+	},
+	{
 		data:  "v: 0b10",
 		value: map[string]interface{}{"v": 2},
-	}, {
+	},
+	{
 		data:  "v: 0xA",
 		value: map[string]interface{}{"v": 10},
-	}, {
+	},
+	{
 		data:  "v: 4294967296",
 		value: map[string]int64{"v": 4294967296},
-	}, {
+	},
+	{
 		data:  "v: 0.1",
 		value: map[string]interface{}{"v": 0.1},
-	}, {
+	},
+	{
 		data:  "v: .1",
 		value: map[string]interface{}{"v": 0.1},
-	}, {
+	},
+	{
 		data:  "v: .Inf",
 		value: map[string]interface{}{"v": math.Inf(+1)},
-	}, {
+	},
+	{
 		data:  "v: -.Inf",
 		value: map[string]interface{}{"v": math.Inf(-1)},
-	}, {
+	},
+	{
 		data:  "v: -10",
 		value: map[string]interface{}{"v": -10},
-	}, {
+	},
+	{
 		data:  "v: -.1",
 		value: map[string]interface{}{"v": -0.1},
 	},
@@ -96,39 +110,48 @@ var unmarshalTests = []struct {
 	{
 		data:  "canonical: 6.8523e+5",
 		value: map[string]interface{}{"canonical": 6.8523e+5},
-	}, {
+	},
+	{
 		data:  "expo: 685.230_15e+03",
 		value: map[string]interface{}{"expo": 685.23015e+03},
-	}, {
+	},
+	{
 		data:  "fixed: 685_230.15",
 		value: map[string]interface{}{"fixed": 685230.15},
-	}, {
+	},
+	{
 		data:  "neginf: -.inf",
 		value: map[string]interface{}{"neginf": math.Inf(-1)},
-	}, {
+	},
+	{
 		data:  "fixed: 685_230.15",
 		value: map[string]float64{"fixed": 685230.15},
 	},
-	//{"sexa: 190:20:30.15", map[string]interface{}{"sexa": 0}}, // Unsupported
-	//{"notanum: .NaN", map[string]interface{}{"notanum": math.NaN()}}, // Equality of NaN fails.
+	// {"sexa: 190:20:30.15", map[string]interface{}{"sexa": 0}}, // Unsupported
+	// {"notanum: .NaN", map[string]interface{}{"notanum": math.NaN()}}, // Equality of NaN fails.
 
 	// Bools are per 1.2 spec.
 	{
 		data:  "canonical: true",
 		value: map[string]interface{}{"canonical": true},
-	}, {
+	},
+	{
 		data:  "canonical: false",
 		value: map[string]interface{}{"canonical": false},
-	}, {
+	},
+	{
 		data:  "bool: True",
 		value: map[string]interface{}{"bool": true},
-	}, {
+	},
+	{
 		data:  "bool: False",
 		value: map[string]interface{}{"bool": false},
-	}, {
+	},
+	{
 		data:  "bool: TRUE",
 		value: map[string]interface{}{"bool": true},
-	}, {
+	},
+	{
 		data:  "bool: FALSE",
 		value: map[string]interface{}{"bool": false},
 	},
@@ -136,16 +159,20 @@ var unmarshalTests = []struct {
 	{
 		data:  "option: on",
 		value: map[string]bool{"option": true},
-	}, {
+	},
+	{
 		data:  "option: y",
 		value: map[string]bool{"option": true},
-	}, {
+	},
+	{
 		data:  "option: Off",
 		value: map[string]bool{"option": false},
-	}, {
+	},
+	{
 		data:  "option: No",
 		value: map[string]bool{"option": false},
-	}, {
+	},
+	{
 		data:  "option: other",
 		value: map[string]bool{},
 		error: "line 1: cannot unmarshal !!str `other` into bool",
@@ -154,54 +181,68 @@ var unmarshalTests = []struct {
 	{
 		data:  "canonical: 685230",
 		value: map[string]interface{}{"canonical": 685230},
-	}, {
+	},
+	{
 		data:  "decimal: +685_230",
 		value: map[string]interface{}{"decimal": 685230},
-	}, {
+	},
+	{
 		data:  "octal: 02472256",
 		value: map[string]interface{}{"octal": 685230},
-	}, {
+	},
+	{
 		data:  "octal: -02472256",
 		value: map[string]interface{}{"octal": -685230},
-	}, {
+	},
+	{
 		data:  "octal: 0o2472256",
 		value: map[string]interface{}{"octal": 685230},
-	}, {
+	},
+	{
 		data:  "octal: -0o2472256",
 		value: map[string]interface{}{"octal": -685230},
-	}, {
+	},
+	{
 		data:  "hexa: 0x_0A_74_AE",
 		value: map[string]interface{}{"hexa": 685230},
-	}, {
+	},
+	{
 		data:  "bin: 0b1010_0111_0100_1010_1110",
 		value: map[string]interface{}{"bin": 685230},
-	}, {
+	},
+	{
 		data:  "bin: -0b101010",
 		value: map[string]interface{}{"bin": -42},
-	}, {
+	},
+	{
 		data:  "bin: -0b1000000000000000000000000000000000000000000000000000000000000000",
 		value: map[string]interface{}{"bin": -9223372036854775808},
-	}, {
+	},
+	{
 		data:  "decimal: +685_230",
 		value: map[string]int{"decimal": 685230},
 	},
 
-	//{"sexa: 190:20:30", map[string]interface{}{"sexa": 0}}, // Unsupported
+	// {"sexa: 190:20:30", map[string]interface{}{"sexa": 0}}, // Unsupported
 
 	// Nulls from spec
 	{
 		data:  "empty:",
 		value: map[string]interface{}{"empty": nil},
-	}, {
+	},
+	{
 		data:  "canonical: ~",
 		value: map[string]interface{}{"canonical": nil},
-	}, {
+	},
+	{
 		data:  "english: null",
 		value: map[string]interface{}{"english": nil},
-	}, {
+	},
+	{
 		data:  "~: null key",
 		value: map[interface{}]string{nil: "null key"},
-	}, {
+	},
+	{
 		data:  "empty:",
 		value: map[string]*bool{"empty": nil},
 	},
@@ -210,17 +251,21 @@ var unmarshalTests = []struct {
 	{
 		data:  "seq: [A,B]",
 		value: map[string]interface{}{"seq": []interface{}{"A", "B"}},
-	}, {
+	},
+	{
 		data:  "seq: [A,B,C,]",
-		value: map[string][]string{"seq": []string{"A", "B", "C"}},
-	}, {
+		value: map[string][]string{"seq": {"A", "B", "C"}},
+	},
+	{
 		data:  "seq: [A,1,C]",
-		value: map[string][]string{"seq": []string{"A", "1", "C"}},
-	}, {
+		value: map[string][]string{"seq": {"A", "1", "C"}},
+	},
+	{
 		data:  "seq: [A,1,C]",
-		value: map[string][]int{"seq": []int{1}},
+		value: map[string][]int{"seq": {1}},
 		error: "line 1: cannot unmarshal !!str `A` into int",
-	}, {
+	},
+	{
 		data:  "seq: [A,1,C]",
 		value: map[string]interface{}{"seq": []interface{}{"A", 1, "C"}},
 	},
@@ -228,17 +273,21 @@ var unmarshalTests = []struct {
 	{
 		data:  "seq:\n - A\n - B",
 		value: map[string]interface{}{"seq": []interface{}{"A", "B"}},
-	}, {
+	},
+	{
 		data:  "seq:\n - A\n - B\n - C",
-		value: map[string][]string{"seq": []string{"A", "B", "C"}},
-	}, {
+		value: map[string][]string{"seq": {"A", "B", "C"}},
+	},
+	{
 		data:  "seq:\n - A\n - 1\n - C",
-		value: map[string][]string{"seq": []string{"A", "1", "C"}},
-	}, {
+		value: map[string][]string{"seq": {"A", "1", "C"}},
+	},
+	{
 		data:  "seq:\n - A\n - 1\n - C",
-		value: map[string][]int{"seq": []int{1}},
+		value: map[string][]int{"seq": {1}},
 		error: "line 2: cannot unmarshal !!str `A` into int",
-	}, {
+	},
+	{
 		data:  "seq:\n - A\n - 1\n - C",
 		value: map[string]interface{}{"seq": []interface{}{"A", 1, "C"}},
 	},
@@ -270,51 +319,66 @@ var unmarshalTests = []struct {
 	{
 		data:  "hello: world",
 		value: &struct{ Hello string }{Hello: "world"},
-	}, {
+	},
+	{
 		data:  "a: {b: c}",
 		value: &struct{ A struct{ B string } }{A: struct{ B string }{B: "c"}},
-	}, {
+	},
+	{
 		data:  "a: {b: c}",
 		value: &struct{ A *struct{ B string } }{A: &struct{ B string }{B: "c"}},
-	}, {
+	},
+	{
 		data:  "a: 'null'",
 		value: &struct{ A *unmarshalerType }{A: &unmarshalerType{value: "null"}},
-	}, {
+	},
+	{
 		data:  "a: {b: c}",
 		value: &struct{ A map[string]string }{A: map[string]string{"b": "c"}},
-	}, {
+	},
+	{
 		data:  "a: {b: c}",
 		value: &struct{ A *map[string]string }{A: &map[string]string{"b": "c"}},
-	}, {
+	},
+	{
 		data:  "a:",
 		value: &struct{ A map[string]string }{},
-	}, {
+	},
+	{
 		data:  "a: 1",
 		value: &struct{ A int }{A: 1},
-	}, {
+	},
+	{
 		data:  "a: 1",
 		value: &struct{ A float64 }{A: 1},
-	}, {
+	},
+	{
 		data:  "a: 1.0",
 		value: &struct{ A int }{A: 1},
-	}, {
+	},
+	{
 		data:  "a: 1.0",
 		value: &struct{ A uint }{A: 1},
-	}, {
+	},
+	{
 		data:  "a: [1, 2]",
 		value: &struct{ A []int }{A: []int{1, 2}},
-	}, {
+	},
+	{
 		data:  "a: [1, 2]",
 		value: &struct{ A [2]int }{A: [2]int{1, 2}},
-	}, {
+	},
+	{
 		data:  "a: 1",
 		value: &struct{ B int }{},
-	}, {
+	},
+	{
 		data: "a: 1",
 		value: &struct {
 			B int "a"
 		}{B: 1},
-	}, {
+	},
+	{
 		// Some limited backwards compatibility with the 1.1 spec.
 		data:  "a: YES",
 		value: &struct{ A bool }{A: true},
@@ -324,14 +388,17 @@ var unmarshalTests = []struct {
 	{
 		data:  "v: 42",
 		value: map[string]uint{"v": 42},
-	}, {
+	},
+	{
 		data:  "v: -42",
 		value: map[string]uint{},
 		error: "line 1: cannot unmarshal !!int `-42` into uint",
-	}, {
+	},
+	{
 		data:  "v: 4294967296",
 		value: map[string]uint64{"v": 4294967296},
-	}, {
+	},
+	{
 		data:  "v: -4294967296",
 		value: map[string]uint64{},
 		error: "line 1: cannot unmarshal !!int `-429496...` into uint64",
@@ -454,7 +521,8 @@ var unmarshalTests = []struct {
 		data:  "v: 4294967297",
 		value: map[string]int32{},
 		error: "line 1: cannot unmarshal !!int `4294967297` into int32",
-	}, {
+	},
+	{
 		data:  "v: 128",
 		value: map[string]int8{},
 		error: "line 1: cannot unmarshal !!int `128` into int8",
@@ -464,25 +532,30 @@ var unmarshalTests = []struct {
 	{
 		data:  "'1': '\"2\"'",
 		value: map[interface{}]interface{}{"1": "\"2\""},
-	}, {
+	},
+	{
 		data:  "v:\n- A\n- 'B\n\n  C'\n",
-		value: map[string][]string{"v": []string{"A", "B\nC"}},
+		value: map[string][]string{"v": {"A", "B\nC"}},
 	},
 
 	// Explicit tags.
 	{
 		data:  "v: !!float '1.1'",
 		value: map[string]interface{}{"v": 1.1},
-	}, {
+	},
+	{
 		data:  "v: !!float 0",
 		value: map[string]interface{}{"v": float64(0)},
-	}, {
+	},
+	{
 		data:  "v: !!float -1",
 		value: map[string]interface{}{"v": float64(-1)},
-	}, {
+	},
+	{
 		data:  "v: !!null ''",
 		value: map[string]interface{}{"v": nil},
-	}, {
+	},
+	{
 		data:  "%TAG !y! tag:yaml.org,2002:\n---\nv: !y!int '1'",
 		value: map[string]interface{}{"v": 1},
 	},
@@ -497,14 +570,16 @@ var unmarshalTests = []struct {
 	{
 		data:  "a: &x 1\nb: &y 2\nc: *x\nd: *y\n",
 		value: &struct{ A, B, C, D int }{A: 1, B: 2, C: 1, D: 2},
-	}, {
+	},
+	{
 		data: "a: &a {c: 1}\nb: *a",
 		value: &struct {
 			A, B struct {
 				C int
 			}
 		}{A: struct{ C int }{C: 1}, B: struct{ C int }{C: 1}},
-	}, {
+	},
+	{
 		data:  "a: &a [1, 2]\nb: *a",
 		value: &struct{ B []int }{B: []int{1, 2}},
 	},
@@ -513,13 +588,16 @@ var unmarshalTests = []struct {
 	{
 		data:  "foo: ''",
 		value: map[string]*string{"foo": new(string)},
-	}, {
+	},
+	{
 		data:  "foo: null",
 		value: map[string]*string{"foo": nil},
-	}, {
+	},
+	{
 		data:  "foo: null",
 		value: map[string]string{"foo": ""},
-	}, {
+	},
+	{
 		data:  "foo: null",
 		value: map[string]interface{}{"foo": nil},
 	},
@@ -528,10 +606,12 @@ var unmarshalTests = []struct {
 	{
 		data:  "foo: ~",
 		value: map[string]*string{"foo": nil},
-	}, {
+	},
+	{
 		data:  "foo: ~",
 		value: map[string]string{"foo": ""},
-	}, {
+	},
+	{
 		data:  "foo: ~",
 		value: map[string]interface{}{"foo": nil},
 	},
@@ -576,13 +656,15 @@ var unmarshalTests = []struct {
 			A int
 			C *inlineB `yaml:",inline"`
 		}{A: 1, C: &inlineB{B: 2, inlineC: inlineC{C: 3}}},
-	}, {
+	},
+	{
 		data: "a: 1\n",
 		value: &struct {
 			A int
 			C *inlineB `yaml:",inline"`
 		}{A: 1},
-	}, {
+	},
+	{
 		data: "a: 1\nc: 3\nd: 4\n",
 		value: &struct {
 			A int
@@ -647,10 +729,12 @@ var unmarshalTests = []struct {
 	{
 		data:  "a: !!binary gIGC\n",
 		value: map[string]string{"a": "\x80\x81\x82"},
-	}, {
+	},
+	{
 		data:  "a: !!binary |\n  " + strings.Repeat("kJCQ", 17) + "kJ\n  CQ\n",
 		value: map[string]string{"a": strings.Repeat("\x90", 54)},
-	}, {
+	},
+	{
 		data:  "a: !!binary |\n  " + strings.Repeat("A", 70) + "\n  ==\n",
 		value: map[string]string{"a": strings.Repeat("\x00", 52)},
 	},
@@ -670,11 +754,11 @@ var unmarshalTests = []struct {
 	// Support encoding.TextUnmarshaler.
 	{
 		data:  "a: 1.2.3.4\n",
-		value: map[string]textUnmarshaler{"a": textUnmarshaler{S: "1.2.3.4"}},
+		value: map[string]textUnmarshaler{"a": {S: "1.2.3.4"}},
 	},
 	{
 		data:  "a: 2015-02-24T18:19:39Z\n",
-		value: map[string]textUnmarshaler{"a": textUnmarshaler{S: "2015-02-24T18:19:39Z"}},
+		value: map[string]textUnmarshaler{"a": {S: "2015-02-24T18:19:39Z"}},
 	},
 
 	// Timestamps
@@ -778,7 +862,8 @@ var unmarshalTests = []struct {
 	{
 		data:  "a: 123456e1\n",
 		value: M{"a": 123456e1},
-	}, {
+	},
+	{
 		data:  "a: 123456E1\n",
 		value: M{"a": 123456e1},
 	},
@@ -802,7 +887,8 @@ var unmarshalTests = []struct {
 	{
 		data:  "true\n#" + strings.Repeat(" ", 512*3),
 		value: "true",
-	}, {
+	},
+	{
 		data:  "true #" + strings.Repeat(" ", 512*3),
 		value: "true",
 	},
@@ -872,7 +958,7 @@ func assertError(t *testing.T, err error, want string) {
 	}
 }
 
-//func (s *S) TestUnmarshalFullTimestamp(c *C) {
+// func (s *S) TestUnmarshalFullTimestamp(c *C) {
 //	// Full timestamp in same format as encoded. This is confirmed to be
 //	// properly decoded by Python as a timestamp as well.
 //	var str = "2015-02-24T18:19:39.123456789-03:00"
@@ -1004,6 +1090,7 @@ var unmarshalErrorTests = []struct {
 			"i: &i [*h,*h,*h,*h,*h,*h,*h,*h,*h]\n",
 		error: "yaml: document contains excessive aliasing",
 	},
+	{data: "\n0:\n<<:\n  {}:\n", error: "yaml: invalid map key"},
 }
 
 func TestUnmarshalErrors(t *testing.T) {
@@ -1026,20 +1113,6 @@ func TestDecoderErrors(t *testing.T) {
 	}
 }
 
-var unmarshalerTests = []struct {
-	data, tag string
-	value     interface{}
-}{
-	{data: "_: {hi: there}", tag: "!!map", value: map[string]interface{}{"hi": "there"}},
-	{data: "_: [1,A]", tag: "!!seq", value: []interface{}{1, "A"}},
-	{data: "_: 10", tag: "!!int", value: 10},
-	{data: "_: null", tag: "!!null"},
-	{data: `_: BAR!`, tag: "!!str", value: "BAR!"},
-	{data: `_: "BAR!"`, tag: "!!str", value: "BAR!"},
-	{data: "_: !!foo 'BAR!'", tag: "!!foo", value: "BAR!"},
-	{data: `_: ""`, tag: "!!str", value: ""},
-}
-
 var unmarshalerResult = map[int]error{}
 
 type unmarshalerType struct {
@@ -1060,10 +1133,6 @@ func (o *unmarshalerType) UnmarshalYAML(value *yaml.Node) error {
 
 type unmarshalerPointer struct {
 	Field *unmarshalerType "_"
-}
-
-type unmarshalerValue struct {
-	Field unmarshalerType "_"
 }
 
 type unmarshalerInlined struct {
@@ -1099,62 +1168,77 @@ type obsoleteUnmarshalerValue struct {
 	Field obsoleteUnmarshalerType "_"
 }
 
-func TestUnmarshalerPointerField(t *testing.T) {
-	for _, item := range unmarshalerTests {
-		obj := &unmarshalerPointer{}
-		err := yaml.Unmarshal([]byte(item.data), obj)
-		require.NoError(t, err)
-		if item.value == nil {
-			require.Nil(t, obj.Field)
-		} else {
-			require.NotNil(t, obj.Field, "Pointer not initialized (%#v)", item.value)
-			require.Equal(t, item.value, obj.Field.value)
-		}
+func TestUnmarshaler(t *testing.T) {
+	tests := []struct {
+		data, tag string
+		value     interface{}
+	}{
+		{data: "_: {hi: there}", tag: "!!map", value: map[string]interface{}{"hi": "there"}},
+		{data: "_: [1,A]", tag: "!!seq", value: []interface{}{1, "A"}},
+		{data: "_: 10", tag: "!!int", value: 10},
+		{data: "_: null", tag: "!!null"},
+		{data: `_: BAR!`, tag: "!!str", value: "BAR!"},
+		{data: `_: "BAR!"`, tag: "!!str", value: "BAR!"},
+		{data: "_: !!foo 'BAR!'", tag: "!!foo", value: "BAR!"},
+		{data: `_: ""`, tag: "!!str", value: ""},
 	}
-	for _, item := range unmarshalerTests {
-		obj := &obsoleteUnmarshalerPointer{}
-		err := yaml.Unmarshal([]byte(item.data), obj)
-		require.NoError(t, err)
-		if item.value == nil {
-			require.Nil(t, obj.Field)
-		} else {
-			require.NotNil(t, obj.Field, "Pointer not initialized (%#v)", item.value)
-			require.Equal(t, item.value, obj.Field.value)
-		}
+	for _, test := range tests {
+		t.Run(test.data, func(t *testing.T) {
+			t.Run("pointer field", func(t *testing.T) {
+				obj := &unmarshalerPointer{}
+				err := yaml.Unmarshal([]byte(test.data), obj)
+				require.NoError(t, err)
+				if test.value == nil {
+					require.Nil(t, obj.Field)
+					return
+				}
+				require.NotNil(t, obj.Field)
+				require.Equal(t, test.value, obj.Field.value)
+			})
+			t.Run("pointer field - obsoleteInterface", func(t *testing.T) {
+				obj := &obsoleteUnmarshalerPointer{}
+				err := yaml.Unmarshal([]byte(test.data), obj)
+				require.NoError(t, err)
+				if test.value == nil {
+					require.Nil(t, obj.Field)
+					return
+				}
+				require.NotNil(t, obj.Field)
+				require.Equal(t, test.value, obj.Field.value)
+			})
+		})
+
+		t.Run("value field", func(t *testing.T) {
+			obj := &obsoleteUnmarshalerValue{}
+			err := yaml.Unmarshal([]byte(test.data), obj)
+			require.NoError(t, err)
+			require.NotNil(t, obj.Field)
+			require.Equal(t, test.value, obj.Field.value)
+		})
 	}
-}
 
-func TestUnmarshalerValueField(t *testing.T) {
-	for _, item := range unmarshalerTests {
-		obj := &obsoleteUnmarshalerValue{}
-		err := yaml.Unmarshal([]byte(item.data), obj)
+	t.Run("inlined field", func(t *testing.T) {
+		obj := &unmarshalerInlined{}
+		err := yaml.Unmarshal([]byte("_: a\ninlined: b\n"), obj)
 		require.NoError(t, err)
-		require.NotNil(t, obj.Field, "Pointer not initialized (%#v)", item.value)
-		require.Equal(t, item.value, obj.Field.value)
-	}
-}
+		require.Equal(t, &unmarshalerType{value: "a"}, obj.Field)
+		require.Equal(t, unmarshalerType{value: map[string]interface{}{"_": "a", "inlined": "b"}}, obj.Inlined)
 
-func TestUnmarshalerInlinedField(t *testing.T) {
-	obj := &unmarshalerInlined{}
-	err := yaml.Unmarshal([]byte("_: a\ninlined: b\n"), obj)
-	require.NoError(t, err)
-	require.Equal(t, &unmarshalerType{value: "a"}, obj.Field)
-	require.Equal(t, unmarshalerType{value: map[string]interface{}{"_": "a", "inlined": "b"}}, obj.Inlined)
+		twc := &unmarshalerInlinedTwice{}
+		err = yaml.Unmarshal([]byte("_: a\ninlined: b\n"), twc)
+		require.NoError(t, err)
+		require.Equal(t, &unmarshalerType{value: "a"}, twc.InlinedTwice.Field)
+		require.Equal(t, unmarshalerType{value: map[string]interface{}{"_": "a", "inlined": "b"}}, twc.InlinedTwice.Inlined)
+	})
 
-	twc := &unmarshalerInlinedTwice{}
-	err = yaml.Unmarshal([]byte("_: a\ninlined: b\n"), twc)
-	require.NoError(t, err)
-	require.Equal(t, &unmarshalerType{value: "a"}, twc.InlinedTwice.Field)
-	require.Equal(t, unmarshalerType{value: map[string]interface{}{"_": "a", "inlined": "b"}}, twc.InlinedTwice.Inlined)
-}
-
-func TestUnmarshalerWholeDocument(t *testing.T) {
-	obj := &obsoleteUnmarshalerType{}
-	err := yaml.Unmarshal([]byte(unmarshalerTests[0].data), obj)
-	require.NoError(t, err)
-	value, ok := obj.value.(map[string]interface{})
-	require.True(t, ok, "value: %#v", obj.value)
-	require.Equal(t, unmarshalerTests[0].value, value["_"])
+	t.Run("whole document", func(t *testing.T) {
+		obj := &obsoleteUnmarshalerType{}
+		err := yaml.Unmarshal([]byte(tests[0].data), obj)
+		require.NoError(t, err)
+		value, ok := obj.value.(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, tests[0].value, value["_"])
+	})
 }
 
 func TestUnmarshalerTypeError(t *testing.T) {
@@ -1451,21 +1535,24 @@ func TestMerge(t *testing.T) {
 
 	wantStringMap := make(map[string]interface{})
 	for k, v := range want {
-		wantStringMap[fmt.Sprintf("%v", k)] = v
+		wantStringMap[k] = v
 	}
 
 	var m map[interface{}]interface{}
 	err := yaml.Unmarshal([]byte(mergeTests), &m)
 	require.NoError(t, err)
-	for name, test := range m {
-		if name == "anchors" {
-			continue
-		}
-		if name == "plain" {
-			require.Equal(t, wantStringMap, test, "test %q failed", name)
-			continue
-		}
-		require.Equal(t, want, test, "test %q failed", name)
+	for key, test := range m {
+		name := fmt.Sprintf("%v", key)
+		t.Run(name, func(t *testing.T) {
+			if name == "anchors" {
+				return
+			}
+			if name == "plain" {
+				require.Equal(t, wantStringMap, test)
+				return
+			}
+			require.Equal(t, want, test)
+		})
 	}
 }
 
@@ -1480,10 +1567,12 @@ func TestMergeStruct(t *testing.T) {
 	err := yaml.Unmarshal([]byte(mergeTests), &m)
 	require.NoError(t, err)
 	for name, test := range m {
-		if name == "anchors" {
-			continue
-		}
-		require.Equal(t, want, test, "test %q failed", name)
+		t.Run(name, func(t *testing.T) {
+			if name == "anchors" {
+				return
+			}
+			require.Equal(t, want, test)
+		})
 	}
 }
 
@@ -1566,7 +1655,7 @@ func TestMergeNestedStruct(t *testing.T) {
 	// Repeat test with a map.
 
 	var testm map[string]interface{}
-	var wantm = map[string]interface{}{
+	wantm := map[string]interface{}{
 		"f": 60,
 		"inner": map[string]interface{}{
 			"a": 10,
@@ -1585,40 +1674,40 @@ var unmarshalNullTests = []struct {
 	pristine, expected func() interface{}
 }{{
 	input:    "null",
-	pristine: func() interface{} { var v interface{}; v = "v"; return &v },
-	expected: func() interface{} { var v interface{}; v = nil; return &v },
+	pristine: func() interface{} { var v interface{} = "v"; return &v },
+	expected: func() interface{} { var v interface{}; return &v },
 }, {
 	input:    "null",
-	pristine: func() interface{} { var s = "s"; return &s },
-	expected: func() interface{} { var s = "s"; return &s },
+	pristine: func() interface{} { s := "s"; return &s },
+	expected: func() interface{} { s := "s"; return &s },
 }, {
 	input:    "null",
-	pristine: func() interface{} { var s = "s"; sptr := &s; return &sptr },
+	pristine: func() interface{} { s := "s"; sptr := &s; return &sptr },
 	expected: func() interface{} { var sptr *string; return &sptr },
 }, {
 	input:    "null",
-	pristine: func() interface{} { var i = 1; return &i },
-	expected: func() interface{} { var i = 1; return &i },
+	pristine: func() interface{} { i := 1; return &i },
+	expected: func() interface{} { i := 1; return &i },
 }, {
 	input:    "null",
-	pristine: func() interface{} { var i = 1; iptr := &i; return &iptr },
+	pristine: func() interface{} { i := 1; iptr := &i; return &iptr },
 	expected: func() interface{} { var iptr *int; return &iptr },
 }, {
 	input:    "null",
-	pristine: func() interface{} { var m = map[string]int{"s": 1}; return &m },
+	pristine: func() interface{} { m := map[string]int{"s": 1}; return &m },
 	expected: func() interface{} { var m map[string]int; return &m },
 }, {
 	input:    "null",
-	pristine: func() interface{} { var m = map[string]int{"s": 1}; return m },
-	expected: func() interface{} { var m = map[string]int{"s": 1}; return m },
+	pristine: func() interface{} { m := map[string]int{"s": 1}; return m },
+	expected: func() interface{} { m := map[string]int{"s": 1}; return m },
 }, {
 	input:    "s2: null\ns3: null",
-	pristine: func() interface{} { var m = map[string]int{"s1": 1, "s2": 2}; return m },
-	expected: func() interface{} { var m = map[string]int{"s1": 1, "s2": 2, "s3": 0}; return m },
+	pristine: func() interface{} { m := map[string]int{"s1": 1, "s2": 2}; return m },
+	expected: func() interface{} { m := map[string]int{"s1": 1, "s2": 2, "s3": 0}; return m },
 }, {
 	input:    "s2: null\ns3: null",
-	pristine: func() interface{} { var m = map[string]interface{}{"s1": 1, "s2": 2}; return m },
-	expected: func() interface{} { var m = map[string]interface{}{"s1": 1, "s2": nil, "s3": nil}; return m },
+	pristine: func() interface{} { m := map[string]interface{}{"s1": 1, "s2": 2}; return m },
+	expected: func() interface{} { m := map[string]interface{}{"s1": 1, "s2": nil, "s3": nil}; return m },
 }}
 
 func TestUnmarshalNull(t *testing.T) {
@@ -1784,8 +1873,9 @@ func TestFuzzCrashers(t *testing.T) {
 		"0: \ufeff\n",
 		"? \ufeff: \ufeff\n",
 	}
-	for _, data := range cases {
+	for _, s := range cases {
 		var v interface{}
-		_ = yaml.Unmarshal([]byte(data), &v)
+		//nolint:errcheck // we are just checking for panics
+		_ = yaml.Unmarshal([]byte(s), &v)
 	}
 }

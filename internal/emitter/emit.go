@@ -2,126 +2,20 @@ package emitter
 
 import (
 	"fmt"
+
 	"github.com/willabides/yaml/internal/common"
 	"github.com/willabides/yaml/internal/yamlh"
 )
 
 // expect DOCUMENT-START or STREAM-END.
 func emitDocumentStart(e *Emitter, event *yamlh.Event, first bool) error {
-	var err error
 	if event.Type == yamlh.DOCUMENT_START_EVENT {
-
-		if event.Version_directive != nil {
-			err = analyzeVersionDirective(event.Version_directive)
-			if err != nil {
-				return err
-			}
-		}
-
-		for i := 0; i < len(event.Tag_directives); i++ {
-			tag_directive := &event.Tag_directives[i]
-			err = analyzeTagDirective(tag_directive)
-			if err != nil {
-				return err
-			}
-			err = appendTagDirective(e, tag_directive, false)
-			if err != nil {
-				return err
-			}
-		}
-
-		for i := 0; i < len(common.DefaultTagDirectives); i++ {
-			tag_directive := &common.DefaultTagDirectives[i]
-			err = appendTagDirective(e, tag_directive, true)
-			if err != nil {
-				return err
-			}
-		}
-
-		implicit := event.Implicit
-		if !first {
-			implicit = false
-		}
-
-		if e.openEnded && (event.Version_directive != nil || len(event.Tag_directives) > 0) {
-			err = writeIndicator(e, []byte("..."), true, false, false)
-			if err != nil {
-				return err
-			}
-			err = writeIndent(e)
-			if err != nil {
-				return err
-			}
-		}
-
-		if event.Version_directive != nil {
-			implicit = false
-			err = writeIndicator(e, []byte("%YAML 1.1"), true, false, false)
-			if err != nil {
-				return err
-			}
-			err = writeIndent(e)
-			if err != nil {
-				return err
-			}
-		}
-
-		if len(event.Tag_directives) > 0 {
-			implicit = false
-			for i := 0; i < len(event.Tag_directives); i++ {
-				tag_directive := &event.Tag_directives[i]
-				err = writeIndicator(e, []byte("%TAG"), true, false, false)
-				if err != nil {
-					return err
-				}
-				err = writeTagHandle(e, tag_directive.Handle)
-				if err != nil {
-					return err
-				}
-				err = writeTagContent(e, tag_directive.Prefix, true)
-				if err != nil {
-					return err
-				}
-				err = writeIndent(e)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		if !implicit {
-			err = writeIndent(e)
-			if err != nil {
-				return err
-			}
-			err = writeIndicator(e, []byte("---"), true, false, false)
-			if err != nil {
-				return err
-			}
-			err = writeIndent(e)
-			if err != nil {
-				return err
-			}
-		}
-
-		if len(e.headComment) > 0 {
-			err = processHeadComment(e)
-			if err != nil {
-				return err
-			}
-			err = e.putBreak()
-			if err != nil {
-				return err
-			}
-		}
-
-		e.state = EmitDocumentContentState
-		return nil
+		return emitDocumentStartEvent(e, event, first)
 	}
 
 	if event.Type == yamlh.STREAM_END_EVENT {
 		if e.openEnded {
-			err = writeIndicator(e, []byte("..."), true, false, false)
+			err := writeIndicator(e, []byte("..."), true, false, false)
 			if err != nil {
 				return err
 			}
@@ -137,9 +31,117 @@ func emitDocumentStart(e *Emitter, event *yamlh.Event, first bool) error {
 	return fmt.Errorf("expected DOCUMENT-START or STREAM-END")
 }
 
+func emitDocumentStartEvent(e *Emitter, event *yamlh.Event, first bool) error {
+	if event.Version_directive != nil {
+		err := analyzeVersionDirective(event.Version_directive)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i < len(event.Tag_directives); i++ {
+		tag_directive := &event.Tag_directives[i]
+		err := analyzeTagDirective(tag_directive)
+		if err != nil {
+			return err
+		}
+		err = appendTagDirective(e, tag_directive, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i < len(common.DefaultTagDirectives); i++ {
+		tag_directive := &common.DefaultTagDirectives[i]
+		err := appendTagDirective(e, tag_directive, true)
+		if err != nil {
+			return err
+		}
+	}
+
+	implicit := event.Implicit
+	if !first {
+		implicit = false
+	}
+
+	if e.openEnded && (event.Version_directive != nil || len(event.Tag_directives) > 0) {
+		err := writeIndicator(e, []byte("..."), true, false, false)
+		if err != nil {
+			return err
+		}
+		err = writeIndent(e)
+		if err != nil {
+			return err
+		}
+	}
+
+	if event.Version_directive != nil {
+		implicit = false
+		err := writeIndicator(e, []byte("%YAML 1.1"), true, false, false)
+		if err != nil {
+			return err
+		}
+		err = writeIndent(e)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(event.Tag_directives) > 0 {
+		implicit = false
+		for i := 0; i < len(event.Tag_directives); i++ {
+			tag_directive := &event.Tag_directives[i]
+			err := writeIndicator(e, []byte("%TAG"), true, false, false)
+			if err != nil {
+				return err
+			}
+			err = writeTagHandle(e, tag_directive.Handle)
+			if err != nil {
+				return err
+			}
+			err = writeTagContent(e, tag_directive.Prefix, true)
+			if err != nil {
+				return err
+			}
+			err = writeIndent(e)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if !implicit {
+		err := writeIndent(e)
+		if err != nil {
+			return err
+		}
+		err = writeIndicator(e, []byte("---"), true, false, false)
+		if err != nil {
+			return err
+		}
+		err = writeIndent(e)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(e.headComment) > 0 {
+		err := processHeadComment(e)
+		if err != nil {
+			return err
+		}
+		err = e.putBreak()
+		if err != nil {
+			return err
+		}
+	}
+
+	e.state = EmitDocumentContentState
+	return nil
+}
+
 // Determine an acceptable scalar style.
 func selectScalarStyle(e *Emitter, event *yamlh.Event) error {
-
 	no_tag := len(e.tagData.Handle) == 0 && len(e.tagData.Suffix) == 0
 	if no_tag && !event.Implicit && !event.Quoted_implicit {
 		return fmt.Errorf("neither tag nor implicit flags are specified")
@@ -679,7 +681,6 @@ func emitBlockMappingValue(e *Emitter, event *yamlh.Event, simple bool) error {
 
 // expect a node.
 func emitNode(e *Emitter, event *yamlh.Event, root, simpleKey bool) error {
-
 	e.rootContext = root
 	e.simpleKeyContext = simpleKey
 

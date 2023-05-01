@@ -23,8 +23,9 @@
 package parserc
 
 import (
-	"github.com/willabides/yaml/internal/yamlh"
 	"io"
+
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 // Set the reader error and return 0.
@@ -54,19 +55,20 @@ func yaml_parser_determine_encoding(parser *YamlParser) error {
 	buf := parser.Raw_buffer
 	pos := parser.Raw_buffer_pos
 	avail := len(buf) - pos
-	if avail >= 2 && buf[pos] == bom_UTF16LE[0] && buf[pos+1] == bom_UTF16LE[1] {
+	switch {
+	case avail >= 2 && buf[pos] == bom_UTF16LE[0] && buf[pos+1] == bom_UTF16LE[1]:
 		parser.Encoding = yamlh.UTF16LE_ENCODING
 		parser.Raw_buffer_pos += 2
 		parser.Offset += 2
-	} else if avail >= 2 && buf[pos] == bom_UTF16BE[0] && buf[pos+1] == bom_UTF16BE[1] {
+	case avail >= 2 && buf[pos] == bom_UTF16BE[0] && buf[pos+1] == bom_UTF16BE[1]:
 		parser.Encoding = yamlh.UTF16BE_ENCODING
 		parser.Raw_buffer_pos += 2
 		parser.Offset += 2
-	} else if avail >= 3 && buf[pos] == bom_UTF8[0] && buf[pos+1] == bom_UTF8[1] && buf[pos+2] == bom_UTF8[2] {
+	case avail >= 3 && buf[pos] == bom_UTF8[0] && buf[pos+1] == bom_UTF8[1] && buf[pos+2] == bom_UTF8[2]:
 		parser.Encoding = yamlh.UTF8_ENCODING
 		parser.Raw_buffer_pos += 3
 		parser.Offset += 3
-	} else {
+	default:
 		parser.Encoding = yamlh.UTF8_ENCODING
 	}
 	return nil
@@ -110,6 +112,8 @@ func yaml_parser_update_raw_buffer(parser *YamlParser) error {
 // Return true on success, false on failure.
 //
 // The length is supposed to be significantly less that the buffer size.
+//
+//nolint:gocyclo // TODO: reduce cyclomatic complexity
 func yaml_parser_update_buffer(parser *YamlParser, length int) error {
 	if parser.Reader == nil {
 		panic("read handler must be set")
@@ -118,16 +122,6 @@ func yaml_parser_update_buffer(parser *YamlParser, length int) error {
 	// [Go] This function was changed to guarantee the requested length size at EOF.
 	// The fact we need to do this is pretty awful, but the description above implies
 	// for that to be the case, and there are tests
-
-	// If the EOF flag is set and the raw buffer is empty, do nothing.
-	if parser.Eof && parser.Raw_buffer_pos == len(parser.Raw_buffer) {
-		// [Go] ACTUALLY! Read the documentation of this function above.
-		// This is just broken. To return true, we need to have the
-		// given length in the buffer. Not doing that means every single
-		// check that calls this function to make sure the buffer has a
-		// given length is Go) panicking; or C) accessing invalid memory.
-		//return true
-	}
 
 	// Return if the buffer contains enough characters.
 	if parser.Unread >= length {
@@ -367,22 +361,23 @@ func yaml_parser_update_buffer(parser *YamlParser, length int) error {
 			parser.Offset += width
 
 			// Finally put the character into the buffer.
-			if value <= 0x7F {
+			switch {
+			case value <= 0x7F:
 				// 0000 0000-0000 007F . 0xxxxxxx
 				parser.Buffer[buffer_len+0] = byte(value)
 				buffer_len += 1
-			} else if value <= 0x7FF {
+			case value <= 0x7FF:
 				// 0000 0080-0000 07FF . 110xxxxx 10xxxxxx
 				parser.Buffer[buffer_len+0] = byte(0xC0 + (value >> 6))
 				parser.Buffer[buffer_len+1] = byte(0x80 + (value & 0x3F))
 				buffer_len += 2
-			} else if value <= 0xFFFF {
+			case value <= 0xFFFF:
 				// 0000 0800-0000 FFFF . 1110xxxx 10xxxxxx 10xxxxxx
 				parser.Buffer[buffer_len+0] = byte(0xE0 + (value >> 12))
 				parser.Buffer[buffer_len+1] = byte(0x80 + ((value >> 6) & 0x3F))
 				parser.Buffer[buffer_len+2] = byte(0x80 + (value & 0x3F))
 				buffer_len += 3
-			} else {
+			default:
 				// 0001 0000-0010 FFFF . 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
 				parser.Buffer[buffer_len+0] = byte(0xF0 + (value >> 18))
 				parser.Buffer[buffer_len+1] = byte(0x80 + ((value >> 12) & 0x3F))
@@ -402,6 +397,7 @@ func yaml_parser_update_buffer(parser *YamlParser, length int) error {
 			break
 		}
 	}
+
 	// [Go] Read the documentation of this function above. To return true,
 	// we need to have the given length in the buffer. Not doing that means
 	// every single check that calls this function to make sure the buffer

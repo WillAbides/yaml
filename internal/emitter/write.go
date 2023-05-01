@@ -212,7 +212,6 @@ func writePlainScalar(e *Emitter, value []byte, allowBreaks bool) error {
 }
 
 func writeSingleQuotedScalar(e *Emitter, value []byte, allow_breaks bool) error {
-
 	err := writeIndicator(e, []byte{'\''}, true, false, false)
 	if err != nil {
 		return err
@@ -297,97 +296,23 @@ func writeDoubleQuotedScalar(e *Emitter, value []byte, allow_breaks bool) error 
 	if err != nil {
 		return err
 	}
+	isBom := false
+	if len(value) >= 3 {
+		isBom = yamlh.Is_bom(value)
+	}
 	count := 0
 	for len(value) > 0 {
 		var w int
 		count++
-		if !yamlh.Is_printable(value, 0) ||
-			yamlh.Is_bom(value, 0) || yamlh.Is_break(value, 0) ||
+		if !yamlh.IsPrintable(value) ||
+			isBom || yamlh.Is_break(value, 0) ||
 			value[0] == '"' || value[0] == '\\' {
 
-			octet := value[0]
-
-			var v rune
-			switch {
-			case octet&0x80 == 0x00:
-				w, v = 1, rune(octet&0x7F)
-			case octet&0xE0 == 0xC0:
-				w, v = 2, rune(octet&0x1F)
-			case octet&0xF0 == 0xE0:
-				w, v = 3, rune(octet&0x0F)
-			case octet&0xF8 == 0xF0:
-				w, v = 4, rune(octet&0x07)
-			}
-			for k := 1; k < w; k++ {
-				octet = value[k]
-				v = (v << 6) + (rune(octet) & 0x3F)
-			}
-
-			err = e.put('\\')
-			if err != nil {
-				return err
-			}
-
-			var ok bool
-			switch v {
-			case 0x00:
-				err = e.put('0')
-			case 0x07:
-				err = e.put('a')
-			case 0x08:
-				err = e.put('b')
-			case 0x09:
-				err = e.put('t')
-			case 0x0A:
-				err = e.put('n')
-			case 0x0b:
-				err = e.put('v')
-			case 0x0c:
-				err = e.put('f')
-			case 0x0d:
-				err = e.put('r')
-			case 0x1b:
-				err = e.put('e')
-			case 0x22:
-				err = e.put('"')
-			case 0x5c:
-				err = e.put('\\')
-			case 0x85:
-				err = e.put('N')
-			case 0xA0:
-				err = e.put('_')
-			case 0x2028:
-				err = e.put('L')
-			case 0x2029:
-				err = e.put('P')
-			default:
-				if v <= 0xFF {
-					err = e.put('x')
-					w = 2
-				} else if v <= 0xFFFF {
-					err = e.put('u')
-					w = 4
-				} else {
-					err = e.put('U')
-					w = 8
-				}
-				if err != nil {
-					break
-				}
-				for k := (w - 1) * 4; ok && k >= 0; k -= 4 {
-					digit := byte((v >> uint(k)) & 0x0F)
-					if digit < 10 {
-						err = e.put(digit + '0')
-					} else {
-						err = e.put(digit + 'A' - 10)
-					}
-				}
-			}
+			value, err = writeDoubleQuotedEscapedChar(e, value)
 			if err != nil {
 				return err
 			}
 			spaces = false
-			value = value[w:]
 			continue
 		}
 		if yamlh.Is_space(value, 0) {
@@ -429,6 +354,96 @@ func writeDoubleQuotedScalar(e *Emitter, value []byte, allow_breaks bool) error 
 	return nil
 }
 
+func writeDoubleQuotedEscapedChar(e *Emitter, value []byte) ([]byte, error) {
+	octet := value[0]
+
+	var v rune
+	var w int
+	switch {
+	case octet&0x80 == 0x00:
+		w, v = 1, rune(octet&0x7F)
+	case octet&0xE0 == 0xC0:
+		w, v = 2, rune(octet&0x1F)
+	case octet&0xF0 == 0xE0:
+		w, v = 3, rune(octet&0x0F)
+	case octet&0xF8 == 0xF0:
+		w, v = 4, rune(octet&0x07)
+	}
+	for k := 1; k < w; k++ {
+		octet = value[k]
+		v = (v << 6) + (rune(octet) & 0x3F)
+	}
+	value = value[w:]
+
+	err := e.put('\\')
+	if err != nil {
+		return nil, err
+	}
+
+	switch v {
+	case 0x00:
+		err = e.put('0')
+	case 0x07:
+		err = e.put('a')
+	case 0x08:
+		err = e.put('b')
+	case 0x09:
+		err = e.put('t')
+	case 0x0A:
+		err = e.put('n')
+	case 0x0b:
+		err = e.put('v')
+	case 0x0c:
+		err = e.put('f')
+	case 0x0d:
+		err = e.put('r')
+	case 0x1b:
+		err = e.put('e')
+	case 0x22:
+		err = e.put('"')
+	case 0x5c:
+		err = e.put('\\')
+	case 0x85:
+		err = e.put('N')
+	case 0xA0:
+		err = e.put('_')
+	case 0x2028:
+		err = e.put('L')
+	case 0x2029:
+		err = e.put('P')
+	default:
+		switch {
+		case v <= 0xFF:
+			err = e.put('x')
+			w = 2
+		case v <= 0xFFFF:
+			err = e.put('u')
+			w = 4
+		default:
+			err = e.put('U')
+			w = 8
+		}
+		if err != nil {
+			return nil, err
+		}
+		for k := (w - 1) * 4; err == nil && k >= 0; k -= 4 {
+			digit := byte((v >> uint(k)) & 0x0F)
+			if digit < 10 {
+				err = e.put(digit + '0')
+			} else {
+				err = e.put(digit + 'A' - 10)
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
 func writeBlockScalarHints(e *Emitter, value []byte) error {
 	var err error
 	if yamlh.Is_space(value, 0) || yamlh.Is_break(value, 0) {
@@ -449,12 +464,13 @@ func writeBlockScalarHints(e *Emitter, value []byte) error {
 		for value[i]&0xC0 == 0x80 {
 			i--
 		}
-		if !yamlh.Is_break(value, i) {
+		switch {
+		case !yamlh.Is_break(value, i):
 			chomp_hint[0] = '-'
-		} else if i == 0 {
+		case i == 0:
 			chomp_hint[0] = '+'
 			e.openEnded = true
-		} else {
+		default:
 			i--
 			for value[i]&0xC0 == 0x80 {
 				i--
@@ -496,7 +512,6 @@ func writeLiteralScalar(e *Emitter, value []byte) error {
 			if err != nil {
 				return err
 			}
-			//e.indention = true
 			breaks = true
 			value = value[w:]
 			continue
@@ -532,7 +547,6 @@ func writeFoldedScalar(e *Emitter, value []byte) error {
 		return err
 	}
 
-	//e.indention = true
 	e.lastCharWhitepace = true
 
 	breaks := true
