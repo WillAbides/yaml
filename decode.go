@@ -969,7 +969,7 @@ func comparableValue(v reflect.Value) bool {
 		switch v.Type().Elem().Kind() {
 		case reflect.Interface, reflect.Array, reflect.Struct:
 			for i := 0; i < v.Type().Len(); i++ {
-				if !v.Index(i).Comparable() {
+				if !comparableValue(v.Index(i)) {
 					return false
 				}
 			}
@@ -978,11 +978,11 @@ func comparableValue(v reflect.Value) bool {
 		return v.Type().Comparable()
 
 	case reflect.Interface:
-		return v.Elem().Comparable()
+		return comparableValue(v.Elem())
 
 	case reflect.Struct:
 		for i := 0; i < v.NumField(); i++ {
-			if !v.Field(i).Comparable() {
+			if !comparableValue(v.Field(i)) {
 				return false
 			}
 		}
