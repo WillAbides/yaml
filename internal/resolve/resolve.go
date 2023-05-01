@@ -31,8 +31,10 @@ type resolveMapItem struct {
 	tag   string
 }
 
-var resolveTable = make([]byte, 256)
-var resolveMap = make(map[string]resolveMapItem)
+var (
+	resolveTable = make([]byte, 256)
+	resolveMap   = make(map[string]resolveMapItem)
+)
 
 var initResolveOnce sync.Once
 
@@ -48,7 +50,7 @@ func initResolve() {
 	}
 	t[int('.')] = '.' // Float (potentially in map)
 
-	var resolveMapList = []struct {
+	resolveMapList := []struct {
 		v   interface{}
 		tag string
 		l   []string
@@ -84,8 +86,10 @@ const (
 	MergeTag     = "!!merge"
 )
 
-var longTags = make(map[string]string)
-var shortTags = make(map[string]string)
+var (
+	longTags  = make(map[string]string)
+	shortTags = make(map[string]string)
+)
 
 const longTagPrefix = "tag:yaml.org,2002:"
 
@@ -119,9 +123,9 @@ func resolvableTag(tag string) bool {
 	return false
 }
 
-var yamlStyleFloat = regexp.MustCompile(`^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$`)
+var yamlStyleFloat = regexp.MustCompile(`^[-+]?(\.\d+|\d+(\.\d*)?)([eE][-+]?\d+)?$`)
 
-func Resolve(tag string, in string) (rtag string, out interface{}, errOut error) {
+func Resolve(tag, in string) (rtag string, out interface{}, errOut error) {
 	initResolveOnce.Do(initResolve)
 	tag = ShortTag(tag)
 	if !resolvableTag(tag) {
@@ -159,7 +163,6 @@ func Resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 		// Handle things we can lookup in a map.
 		if item, ok := resolveMap[in]; ok {
 			return item.tag, item.value, nil
-			//return postResolve(tag, item.tag, item.value)
 		}
 
 		// Base 60 floats are a bad idea, were dropped in YAML 1.2, and
@@ -175,7 +178,6 @@ func Resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 			floatv, err := strconv.ParseFloat(in, 64)
 			if err == nil {
 				return FloatTag, floatv, nil
-				//return postResolve(tag, floatTag, floatv)
 			}
 
 		case 'D', 'S':
@@ -189,7 +191,7 @@ func Resolve(tag string, in string) (rtag string, out interface{}, errOut error)
 				}
 			}
 
-			plain := strings.Replace(in, "_", "", -1)
+			plain := strings.ReplaceAll(in, "_", "")
 			intv, err := strconv.ParseInt(plain, 0, 64)
 			if err == nil {
 				if intv == int64(int(intv)) {

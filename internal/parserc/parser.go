@@ -1,8 +1,9 @@
 package parserc
 
 import (
-	"github.com/willabides/yaml/internal/yamlh"
 	"io"
+
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 // ParserState The states of the parser.

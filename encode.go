@@ -18,10 +18,6 @@ package yaml
 import (
 	"encoding"
 	"fmt"
-	"github.com/willabides/yaml/internal/emitter"
-	"github.com/willabides/yaml/internal/resolve"
-	"github.com/willabides/yaml/internal/sorter"
-	"github.com/willabides/yaml/internal/yamlh"
 	"io"
 	"reflect"
 	"regexp"
@@ -30,6 +26,11 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/willabides/yaml/internal/emitter"
+	"github.com/willabides/yaml/internal/resolve"
+	"github.com/willabides/yaml/internal/sorter"
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 type Encoder struct {
@@ -134,12 +135,17 @@ func (e *Encoder) marshal(tag string, v interface{}) error {
 	case nil:
 		return e.encodeNil()
 	}
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr && rv.IsNil() {
-		return e.encodeNil()
-	}
+	return e.marshalReflectValue(tag, reflect.ValueOf(v))
+}
+
+func (e *Encoder) marshalReflectValue(tag string, rv reflect.Value) error {
 	switch rv.Kind() {
-	case reflect.Interface, reflect.Ptr:
+	case reflect.Ptr:
+		if rv.IsNil() {
+			return e.encodeNil()
+		}
+		return e.marshal(tag, rv.Elem().Interface())
+	case reflect.Interface:
 		return e.marshal(tag, rv.Elem().Interface())
 	case reflect.Map:
 		return e.encodeMap(tag, rv)
@@ -162,7 +168,6 @@ func (e *Encoder) marshal(tag string, v interface{}) error {
 	default:
 		panic("cannot marshal type: " + rv.Type().String())
 	}
-	return nil
 }
 
 func (e *Encoder) encodeMap(tag string, in reflect.Value) error {
@@ -315,7 +320,7 @@ func isBase60Float(s string) (result bool) {
 
 // From http://yaml.org/type/float.html, except the regular expression there
 // is bogus. In practice parsers do not enforce the "\.[0-9_]*" suffix.
-var base60float = regexp.MustCompile(`^[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?$`)
+var base60float = regexp.MustCompile(`^[-+]?\d[0-9_]*(?::[0-5]?\d)+(?:\.[0-9_]*)?$`)
 
 // isOldBool returns whether s is bool notation as defined in YAML 1.1.
 //
@@ -332,7 +337,7 @@ func isOldBool(s string) (result bool) {
 	}
 }
 
-func (e *Encoder) encodeString(tag string, s string) error {
+func (e *Encoder) encodeString(tag, s string) error {
 	var style yamlh.YamlScalarStyle
 	canUsePlain := true
 	switch {
@@ -465,21 +470,21 @@ func (e *Encoder) encodeNode(node *Node, tail string) error {
 
 	// If the tag was not explicitly requested, and dropping it won't change the
 	// implicit tag of the value, don't include it in the presentation.
-	var tag = node.Tag
-	var stag = resolve.ShortTag(tag)
+	tag := node.Tag
+	shortTag := resolve.ShortTag(tag)
 	var forceQuoting bool
 	if tag != "" && node.Style&TaggedStyle == 0 {
 		if node.Kind == ScalarNode {
-			if stag == resolve.StrTag && node.Style&(SingleQuotedStyle|DoubleQuotedStyle|LiteralStyle|FoldedStyle) != 0 {
+			if shortTag == resolve.StrTag && node.Style&(SingleQuotedStyle|DoubleQuotedStyle|LiteralStyle|FoldedStyle) != 0 {
 				tag = ""
 			} else {
 				rtag, _, err := resolve.Resolve("", node.Value)
 				if err != nil {
 					return err
 				}
-				if rtag == stag {
+				if rtag == shortTag {
 					tag = ""
-				} else if stag == resolve.StrTag {
+				} else if shortTag == resolve.StrTag {
 					tag = ""
 					forceQuoting = true
 				}
@@ -492,7 +497,7 @@ func (e *Encoder) encodeNode(node *Node, tail string) error {
 			case SequenceNode:
 				rtag = resolve.SeqTag
 			}
-			if rtag == stag {
+			if rtag == shortTag {
 				tag = ""
 			}
 		}
@@ -500,129 +505,145 @@ func (e *Encoder) encodeNode(node *Node, tail string) error {
 
 	switch node.Kind {
 	case DocumentNode:
-		event := documentStartEvent()
-		event.Head_comment = []byte(node.HeadComment)
-		err := e.emitter.Emit(event, false)
-		if err != nil {
-			return err
-		}
-		for _, n := range node.Content {
-			err = e.encodeNode(n, "")
-			if err != nil {
-				return err
-			}
-		}
-		event = documentEndEvent()
-		event.Foot_comment = []byte(node.FootComment)
-		return e.emitter.Emit(event, false)
-
+		return e.encodeDocumentNode(node)
 	case SequenceNode:
-		style := yamlh.BLOCK_SEQUENCE_STYLE
-		if node.Style&FlowStyle != 0 {
-			style = yamlh.FLOW_SEQUENCE_STYLE
-		}
-		event := sequenceStartEvent([]byte(node.Anchor), []byte(resolve.LongTag(tag)), tag == "", style)
-		event.Head_comment = []byte(node.HeadComment)
-		err := e.emitter.Emit(event, false)
-		if err != nil {
-			return err
-		}
-		for _, node := range node.Content {
-			err := e.encodeNode(node, "")
-			if err != nil {
-				return err
-			}
-		}
-		event = sequenceEndEvent()
-		event.Line_comment = []byte(node.LineComment)
-		event.Foot_comment = []byte(node.FootComment)
-		return e.emitter.Emit(event, false)
-
+		return e.encodeSequenceNode(node, tag)
 	case MappingNode:
-		style := yamlh.BLOCK_MAPPING_STYLE
-		if node.Style&FlowStyle != 0 {
-			style = yamlh.FLOW_MAPPING_STYLE
-		}
-		event := mappingStartEvent([]byte(node.Anchor), []byte(resolve.LongTag(tag)), tag == "", style)
-		event.Tail_comment = []byte(tail)
-		event.Head_comment = []byte(node.HeadComment)
-		err := e.emitter.Emit(event, false)
-		if err != nil {
-			return err
-		}
-
-		// The tail logic below moves the foot comment of prior keys to the following key,
-		// since the value for each key may be a nested structure and the foot needs to be
-		// processed only the entirety of the value is streamed. The last tail is processed
-		// with the mapping end event.
-		var tl string
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			k := node.Content[i]
-			foot := k.FootComment
-			if foot != "" {
-				kopy := *k
-				kopy.FootComment = ""
-				k = &kopy
-			}
-			err = e.encodeNode(k, tl)
-			if err != nil {
-				return err
-			}
-			tl = foot
-
-			v := node.Content[i+1]
-			err = e.encodeNode(v, "")
-			if err != nil {
-				return err
-			}
-		}
-
-		event = mappingEndEvent()
-		event.Tail_comment = []byte(tl)
-		event.Line_comment = []byte(node.LineComment)
-		event.Foot_comment = []byte(node.FootComment)
-		return e.emitter.Emit(event, false)
-
+		return e.encodeMappingNode(node, tail, tag)
 	case AliasNode:
-		event := aliasEvent([]byte(node.Value))
-		event.Head_comment = []byte(node.HeadComment)
-		event.Line_comment = []byte(node.LineComment)
-		event.Foot_comment = []byte(node.FootComment)
-		return e.emitter.Emit(event, false)
-
+		return e.encodeAliasNode(node)
 	case ScalarNode:
-		value := node.Value
-		if !utf8.ValidString(value) {
-			if stag == resolve.BinaryTag {
-				return fmt.Errorf("yaml: explicitly tagged !!binary data must be base64-encoded")
-			}
-			if stag != "" {
-				return fmt.Errorf("yaml: cannot marshal invalid UTF-8 data as %s", stag)
-			}
-			// It can't be encoded directly as YAML so use a binary tag
-			// and encode it as base64.
-			tag = resolve.BinaryTag
-			value = resolve.EncodeBase64(value)
-		}
-
-		style := yamlh.PLAIN_SCALAR_STYLE
-		switch {
-		case node.Style&DoubleQuotedStyle != 0:
-			style = yamlh.DOUBLE_QUOTED_SCALAR_STYLE
-		case node.Style&SingleQuotedStyle != 0:
-			style = yamlh.SINGLE_QUOTED_SCALAR_STYLE
-		case node.Style&LiteralStyle != 0:
-			style = yamlh.LITERAL_SCALAR_STYLE
-		case node.Style&FoldedStyle != 0:
-			style = yamlh.FOLDED_SCALAR_STYLE
-		case strings.Contains(value, "\n"):
-			style = yamlh.LITERAL_SCALAR_STYLE
-		case forceQuoting:
-			style = yamlh.DOUBLE_QUOTED_SCALAR_STYLE
-		}
-
-		return e.emitScalar(value, node.Anchor, tag, style, []byte(node.HeadComment), []byte(node.LineComment), []byte(node.FootComment), []byte(tail))
+		return e.encodeScalarNode(node, tail, shortTag, tag, forceQuoting)
 	default:
 		return fmt.Errorf("yaml: cannot encode node with unknown kind %d", node.Kind)
 	}
+}
+
+func (e *Encoder) encodeDocumentNode(node *Node) error {
+	event := documentStartEvent()
+	event.Head_comment = []byte(node.HeadComment)
+	err := e.emitter.Emit(event, false)
+	if err != nil {
+		return err
+	}
+	for _, n := range node.Content {
+		err = e.encodeNode(n, "")
+		if err != nil {
+			return err
+		}
+	}
+	event = documentEndEvent()
+	event.Foot_comment = []byte(node.FootComment)
+	return e.emitter.Emit(event, false)
+}
+
+func (e *Encoder) encodeSequenceNode(node *Node, tag string) error {
+	style := yamlh.BLOCK_SEQUENCE_STYLE
+	if node.Style&FlowStyle != 0 {
+		style = yamlh.FLOW_SEQUENCE_STYLE
+	}
+	event := sequenceStartEvent([]byte(node.Anchor), []byte(resolve.LongTag(tag)), tag == "", style)
+	event.Head_comment = []byte(node.HeadComment)
+	err := e.emitter.Emit(event, false)
+	if err != nil {
+		return err
+	}
+	for _, n := range node.Content {
+		err = e.encodeNode(n, "")
+		if err != nil {
+			return err
+		}
+	}
+	event = sequenceEndEvent()
+	event.Line_comment = []byte(node.LineComment)
+	event.Foot_comment = []byte(node.FootComment)
+	return e.emitter.Emit(event, false)
+}
+
+func (e *Encoder) encodeMappingNode(node *Node, tail, tag string) error {
+	style := yamlh.BLOCK_MAPPING_STYLE
+	if node.Style&FlowStyle != 0 {
+		style = yamlh.FLOW_MAPPING_STYLE
+	}
+	event := mappingStartEvent([]byte(node.Anchor), []byte(resolve.LongTag(tag)), tag == "", style)
+	event.Tail_comment = []byte(tail)
+	event.Head_comment = []byte(node.HeadComment)
+	err := e.emitter.Emit(event, false)
+	if err != nil {
+		return err
+	}
+
+	// The tail logic below moves the foot comment of prior keys to the following key,
+	// since the value for each key may be a nested structure and the foot needs to be
+	// processed only the entirety of the value is streamed. The last tail is processed
+	// with the mapping end event.
+	var tl string
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		k := node.Content[i]
+		foot := k.FootComment
+		if foot != "" {
+			kopy := *k
+			kopy.FootComment = ""
+			k = &kopy
+		}
+		err = e.encodeNode(k, tl)
+		if err != nil {
+			return err
+		}
+		tl = foot
+
+		v := node.Content[i+1]
+		err = e.encodeNode(v, "")
+		if err != nil {
+			return err
+		}
+	}
+
+	event = mappingEndEvent()
+	event.Tail_comment = []byte(tl)
+	event.Line_comment = []byte(node.LineComment)
+	event.Foot_comment = []byte(node.FootComment)
+	return e.emitter.Emit(event, false)
+}
+
+func (e *Encoder) encodeAliasNode(node *Node) error {
+	event := aliasEvent([]byte(node.Value))
+	event.Head_comment = []byte(node.HeadComment)
+	event.Line_comment = []byte(node.LineComment)
+	event.Foot_comment = []byte(node.FootComment)
+	return e.emitter.Emit(event, false)
+}
+
+func (e *Encoder) encodeScalarNode(node *Node, tail, shortTag, tag string, forceQuoting bool) error {
+	value := node.Value
+	if !utf8.ValidString(value) {
+		if shortTag == resolve.BinaryTag {
+			return fmt.Errorf("yaml: explicitly tagged !!binary data must be base64-encoded")
+		}
+		if shortTag != "" {
+			return fmt.Errorf("yaml: cannot marshal invalid UTF-8 data as %s", shortTag)
+		}
+		// It can't be encoded directly as YAML so use a binary tag
+		// and encode it as base64.
+		tag = resolve.BinaryTag
+		value = resolve.EncodeBase64(value)
+	}
+
+	style := yamlh.PLAIN_SCALAR_STYLE
+	switch {
+	case node.Style&DoubleQuotedStyle != 0:
+		style = yamlh.DOUBLE_QUOTED_SCALAR_STYLE
+	case node.Style&SingleQuotedStyle != 0:
+		style = yamlh.SINGLE_QUOTED_SCALAR_STYLE
+	case node.Style&LiteralStyle != 0:
+		style = yamlh.LITERAL_SCALAR_STYLE
+	case node.Style&FoldedStyle != 0:
+		style = yamlh.FOLDED_SCALAR_STYLE
+	case strings.Contains(value, "\n"):
+		style = yamlh.LITERAL_SCALAR_STYLE
+	case forceQuoting:
+		style = yamlh.DOUBLE_QUOTED_SCALAR_STYLE
+	}
+
+	return e.emitScalar(value, node.Anchor, tag, style, []byte(node.HeadComment), []byte(node.LineComment), []byte(node.FootComment), []byte(tail))
 }

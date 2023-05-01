@@ -274,7 +274,6 @@ func (e EventType) String() string {
 
 // The Event structure.
 type Event struct {
-
 	// The event type.
 	Type EventType
 

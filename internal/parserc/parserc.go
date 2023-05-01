@@ -25,9 +25,10 @@ package parserc
 import (
 	"bytes"
 	"fmt"
+	"strconv"
+
 	"github.com/willabides/yaml/internal/common"
 	"github.com/willabides/yaml/internal/yamlh"
-	"strconv"
 )
 
 // The parser implements the following grammar:
@@ -263,7 +264,6 @@ func yaml_parser_parse_stream_start(parser *YamlParser) (*yamlh.Event, error) {
 //
 //	*************************
 func yaml_parser_parse_document_start(parser *YamlParser, implicit bool) (*yamlh.Event, error) {
-
 	token, err := peek_token(parser)
 	if err != nil {
 		return nil, err
@@ -551,7 +551,6 @@ func yaml_parser_parse_node(parser *YamlParser, block, indentless_sequence bool)
 	if tag_token {
 		if len(tag_handle) == 0 {
 			tag = tag_suffix
-			tag_suffix = nil
 		} else {
 			for i := range parser.Tag_directives {
 				if bytes.Equal(parser.Tag_directives[i].Handle, tag_handle) {
@@ -1186,8 +1185,8 @@ func yaml_parser_process_empty_scalar(mark yamlh.Position) *yamlh.Event {
 // Parse directives.
 func yaml_parser_process_directives(parser *YamlParser,
 	version_directive_ref **yamlh.VersionDirective,
-	tag_directives_ref *[]yamlh.TagDirective) error {
-
+	tag_directives_ref *[]yamlh.TagDirective,
+) error {
 	var version_directive *yamlh.VersionDirective
 	var tag_directives []yamlh.TagDirective
 

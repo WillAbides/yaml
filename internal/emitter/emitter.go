@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/willabides/yaml/internal/yamlh"
 	"io"
+
+	"github.com/willabides/yaml/internal/yamlh"
 )
 
 type emitterState int
@@ -35,8 +36,17 @@ const (
 	emitEndState                     // expect nothing.
 )
 
-type Emitter struct {
+type scalarData struct {
+	value               []byte                // The scalar value.
+	multiline           bool                  // Does the scalar contain Line breaks?
+	flowPlainAllowed    bool                  // Can the scalar be expressed in the flow plain style?
+	blockPlainAllowed   bool                  // Can the scalar be expressed in the block plain style?
+	singleQuotedAllowed bool                  // Can the scalar be expressed in the single quoted style?
+	blockAllowed        bool                  // Can the scalar be expressed in the literal or folded styles?
+	style               yamlh.YamlScalarStyle // The output style.
+}
 
+type Emitter struct {
 	// Writer stuff
 	writer io.Writer
 
@@ -85,15 +95,7 @@ type Emitter struct {
 	}
 
 	// Scalar analysis.
-	scalarData struct {
-		value               []byte                // The scalar value.
-		multiline           bool                  // Does the scalar contain Line breaks?
-		flowPlainAllowed    bool                  // Can the scalar be expessed in the flow plain style?
-		blockPlainAllowed   bool                  // Can the scalar be expressed in the block plain style?
-		singleQuotedAllowed bool                  // Can the scalar be expressed in the single quoted style?
-		blockAllowed        bool                  // Can the scalar be expressed in the literal or folded styles?
-		style               yamlh.YamlScalarStyle // The output style.
-	}
+	scalarData scalarData
 
 	// Comments
 	headComment    []byte
@@ -222,13 +224,10 @@ func (e *Emitter) readyToEmit() bool {
 	switch e.eventsQueue[e.eventsHead].Type {
 	case yamlh.DOCUMENT_START_EVENT:
 		accumulate = 1
-		break
 	case yamlh.SEQUENCE_START_EVENT:
 		accumulate = 2
-		break
 	case yamlh.MAPPING_START_EVENT:
 		accumulate = 3
-		break
 	default:
 		return true
 	}

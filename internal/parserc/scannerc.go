@@ -25,6 +25,7 @@ package parserc
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/willabides/yaml/internal/yamlh"
 )
 
@@ -777,8 +778,8 @@ func yaml_parser_fetch_next_token(parser *YamlParser) (errOut error) {
 	//
 	// The last rule is more restrictive than the specification requires.
 	// [Go] TODO Make this logic more reasonable.
-	//switch parser.buffer[parser.buffer_pos] {
-	//case '-', '?', ':', ',', '?', '-', ',', ':', ']', '[', '}', '{', '&', '#', '!', '*', '>', '|', '"', '\'', '@', '%', '-', '`':
+	// switch parser.buffer[parser.buffer_pos] {
+	// case '-', '?', ':', ',', '?', '-', ',', ':', ']', '[', '}', '{', '&', '#', '!', '*', '>', '|', '"', '\'', '@', '%', '-', '`':
 	//}
 	if !(yamlh.Is_blankz(parser.Buffer, parser.Buffer_pos) || parser.Buffer[parser.Buffer_pos] == '-' ||
 		parser.Buffer[parser.Buffer_pos] == '?' || parser.Buffer[parser.Buffer_pos] == ':' ||
@@ -992,7 +993,6 @@ func yaml_parser_unroll_indent(parser *YamlParser, column int, scan_mark yamlh.P
 
 // Initialize the scanner and produce the STREAM-START token.
 func yaml_parser_fetch_stream_start(parser *YamlParser) {
-
 	// Set the initial indentation.
 	parser.Indent = -1
 
@@ -1019,7 +1019,6 @@ func yaml_parser_fetch_stream_start(parser *YamlParser) {
 
 // Produce the STREAM-END token and shut down the scanner.
 func yaml_parser_fetch_stream_end(parser *YamlParser) error {
-
 	// Force new line.
 	if parser.Mark.Column != 0 {
 		parser.Mark.Column = 0
@@ -1105,7 +1104,6 @@ func yaml_parser_fetch_document_indicator(parser *YamlParser, typ yamlh.TokenTyp
 
 // Produce the FLOW-SEQUENCE-START or FLOW-MAPPING-START token.
 func yaml_parser_fetch_flow_collection_start(parser *YamlParser, typ yamlh.TokenType) error {
-
 	// The indicators '[' and '{' may start a simple key.
 	err := yaml_parser_save_simple_key(parser)
 	if err != nil {
@@ -1235,7 +1233,6 @@ func yaml_parser_fetch_block_entry(parser *YamlParser) error {
 
 // Produce the KEY token.
 func yaml_parser_fetch_key(parser *YamlParser) error {
-
 	// In the block context, additional checks are required.
 	if parser.Flow_level == 0 {
 		// Check if we are allowed to start a new key (not nessesary simple).
@@ -1275,7 +1272,6 @@ func yaml_parser_fetch_key(parser *YamlParser) error {
 
 // Produce the VALUE token.
 func yaml_parser_fetch_value(parser *YamlParser) error {
-
 	simple_key := &parser.Simple_keys[len(parser.Simple_keys)-1]
 
 	// Have we found a simple key?
@@ -1445,7 +1441,6 @@ func yaml_parser_fetch_plain_scalar(parser *YamlParser) error {
 
 // Eat whitespaces and comments until the next token is found.
 func yaml_parser_scan_to_next_token(parser *YamlParser) error {
-
 	scan_mark := parser.Mark
 
 	// Until the next token is not found.
@@ -1457,7 +1452,7 @@ func yaml_parser_scan_to_next_token(parser *YamlParser) error {
 				return err
 			}
 		}
-		if parser.Mark.Column == 0 && yamlh.Is_bom(parser.Buffer, parser.Buffer_pos) {
+		if parser.Mark.Column == 0 && yamlh.Is_bom(parser.Buffer) {
 			skip(parser)
 		}
 
@@ -1558,7 +1553,8 @@ func yaml_parser_scan_directive(parser *YamlParser) (*yamlh.YamlToken, error) {
 	var token yamlh.YamlToken
 
 	// Is it a YAML directive?
-	if bytes.Equal(name, []byte("YAML")) {
+	switch {
+	case bytes.Equal(name, []byte("YAML")):
 		// Scan the VERSION directive value.
 		var major, minor int8
 		major, minor, err = yaml_parser_scan_version_directive_value(parser, start_mark)
@@ -1577,7 +1573,7 @@ func yaml_parser_scan_directive(parser *YamlParser) (*yamlh.YamlToken, error) {
 		}
 
 		// Is it a TAG directive?
-	} else if bytes.Equal(name, []byte("TAG")) {
+	case bytes.Equal(name, []byte("TAG")):
 		// Scan the TAG directive value.
 		var handle, prefix []byte
 		handle, prefix, err = yaml_parser_scan_tag_directive_value(parser, start_mark)
@@ -1596,7 +1592,7 @@ func yaml_parser_scan_directive(parser *YamlParser) (*yamlh.YamlToken, error) {
 		}
 
 		// Unknown directive.
-	} else {
+	default:
 		return nil, newScannerError(parser, start_mark, "found unknown directive name")
 	}
 
@@ -1620,7 +1616,7 @@ func yaml_parser_scan_directive(parser *YamlParser) (*yamlh.YamlToken, error) {
 
 	if parser.Buffer[parser.Buffer_pos] == '#' {
 		// [Go] Discard this inline comment for the time being.
-		//if !yaml_parser_scan_line_comment(parser, start_mark) {
+		// if !yaml_parser_scan_line_comment(parser, start_mark) {
 		//	return false
 		//}
 		for !yamlh.Is_breakz(parser.Buffer, parser.Buffer_pos) {
@@ -1749,7 +1745,6 @@ const max_number_length = 2
 //	%YAML   1.1     # a comment \n
 //	          ^
 func yaml_parser_scan_version_directive_number(parser *YamlParser, start_mark yamlh.Position) (int8, error) {
-
 	// Repeat while the next character is digit.
 	if parser.Unread < 1 {
 		err := yaml_parser_update_buffer(parser, 1)
@@ -1851,7 +1846,6 @@ func yaml_parser_scan_tag_directive_value(parser *YamlParser, start_mark yamlh.P
 	}
 	if !yamlh.Is_blankz(parser.Buffer, parser.Buffer_pos) {
 		return nil, nil, newScannerError(parser, start_mark, "did not find expected whitespace or line break")
-
 	}
 
 	return handle_value, prefix_value, nil
@@ -2043,7 +2037,7 @@ func yaml_parser_scan_tag_handle(parser *YamlParser, directive bool, start_mark 
 	// Check if the trailing character is '!' and copy it.
 	if parser.Buffer[parser.Buffer_pos] == '!' {
 		s = read(parser, s)
-	} else {
+	} else if directive && string(s) != "!" {
 		// It's either the '!' tag or not really a tag handle.  If it's a %TAG
 		// directive, it's an error.  If it's a tag token, it must be a part of URI.
 		if directive && string(s) != "!" {
@@ -2057,7 +2051,7 @@ func yaml_parser_scan_tag_handle(parser *YamlParser, directive bool, start_mark 
 
 // Scan a tag.
 func yaml_parser_scan_tag_uri(parser *YamlParser, directive bool, head []byte, start_mark yamlh.Position, uri *[]byte) error {
-	//size_t length = head ? strlen((char *)head) : 0
+	// size_t length = head ? strlen((char *)head) : 0
 	var s []byte
 	hasTag := len(head) > 0
 
@@ -2120,7 +2114,6 @@ func yaml_parser_scan_tag_uri(parser *YamlParser, directive bool, head []byte, s
 
 // Decode an URI-escape sequence corresponding to a single UTF-8 character.
 func yaml_parser_scan_uri_escapes(parser *YamlParser, directive bool, start_mark yamlh.Position, s *[]byte) error {
-
 	// Decode the required number of characters.
 	w := 1024
 	for w > 0 {
@@ -2147,7 +2140,7 @@ func yaml_parser_scan_uri_escapes(parser *YamlParser, directive bool, start_mark
 			if w == 0 {
 				return newScannerError(parser, start_mark, "found an incorrect leading UTF-8 octet")
 			}
-		} else {
+		} else if octet&0xC0 != 0x80 {
 			// Check if the trailing octet is correct.
 			if octet&0xC0 != 0x80 {
 				return newScannerError(parser, start_mark, "found an incorrect trailing UTF-8 octet")
@@ -2267,7 +2260,6 @@ func yaml_parser_scan_block_scalar(parser *YamlParser, literal bool) (*yamlh.Yam
 	// Check if we are at the end of the line.
 	if !yamlh.Is_breakz(parser.Buffer, parser.Buffer_pos) {
 		return nil, newScannerError(parser, start_mark, "did not find expected comment or line break")
-
 	}
 
 	// Eat a line break.
@@ -2493,7 +2485,6 @@ func yaml_parser_scan_flow_scalar(parser *YamlParser, single bool) (*yamlh.YamlT
 			} else if !single && parser.Buffer[parser.Buffer_pos] == '"' {
 				// It is a right double quote.
 				break
-
 			} else if !single && parser.Buffer[parser.Buffer_pos] == '\\' && yamlh.Is_break(parser.Buffer, parser.Buffer_pos+1) {
 				// It is an escaped line break.
 				if parser.Unread < 3 {
@@ -2540,19 +2531,13 @@ func yaml_parser_scan_flow_scalar(parser *YamlParser, single bool) (*yamlh.YamlT
 				case '\\':
 					s = append(s, '\\')
 				case 'N': // NEL (#x85)
-					s = append(s, '\xC2')
-					s = append(s, '\x85')
+					s = append(s, '\xC2', '\x85')
 				case '_': // #xA0
-					s = append(s, '\xC2')
-					s = append(s, '\xA0')
+					s = append(s, '\xC2', '\xA0')
 				case 'L': // LS (#x2028)
-					s = append(s, '\xE2')
-					s = append(s, '\x80')
-					s = append(s, '\xA8')
+					s = append(s, '\xE2', '\x80', '\xA8')
 				case 'P': // PS (#x2029)
-					s = append(s, '\xE2')
-					s = append(s, '\x80')
-					s = append(s, '\xA9')
+					s = append(s, '\xE2', '\x80', '\xA9')
 				case 'x':
 					code_length = 2
 				case 'u':
@@ -2591,17 +2576,11 @@ func yaml_parser_scan_flow_scalar(parser *YamlParser, single bool) (*yamlh.YamlT
 					if value <= 0x7F {
 						s = append(s, byte(value))
 					} else if value <= 0x7FF {
-						s = append(s, byte(0xC0+(value>>6)))
-						s = append(s, byte(0x80+(value&0x3F)))
+						s = append(s, byte(0xC0+(value>>6)), byte(0x80+(value&0x3F)))
 					} else if value <= 0xFFFF {
-						s = append(s, byte(0xE0+(value>>12)))
-						s = append(s, byte(0x80+((value>>6)&0x3F)))
-						s = append(s, byte(0x80+(value&0x3F)))
+						s = append(s, byte(0xE0+(value>>12)), byte(0x80+((value>>6)&0x3F)), byte(0x80+(value&0x3F)))
 					} else {
-						s = append(s, byte(0xF0+(value>>18)))
-						s = append(s, byte(0x80+((value>>12)&0x3F)))
-						s = append(s, byte(0x80+((value>>6)&0x3F)))
-						s = append(s, byte(0x80+(value&0x3F)))
+						s = append(s, byte(0xF0+(value>>18)), byte(0x80+((value>>12)&0x3F)), byte(0x80+((value>>6)&0x3F)), byte(0x80+(value&0x3F)))
 					}
 
 					// Advance the pointer.
@@ -2713,10 +2692,9 @@ func yaml_parser_scan_flow_scalar(parser *YamlParser, single bool) (*yamlh.YamlT
 
 // Scan a plain scalar.
 func yaml_parser_scan_plain_scalar(parser *YamlParser) (*yamlh.YamlToken, error) {
-
 	var s, leading_break, trailing_breaks, whitespaces []byte
 	var leading_blanks bool
-	var indent = parser.Indent + 1
+	indent := parser.Indent + 1
 
 	start_mark := parser.Mark
 	end_mark := parser.Mark
@@ -2935,18 +2913,18 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 		token = parser.Tokens[len(parser.Tokens)-2]
 	}
 
-	var token_mark = token.Start_mark
+	token_mark := token.Start_mark
 	var start_mark yamlh.Position
-	var next_indent = parser.Indent
+	next_indent := parser.Indent
 	if next_indent < 0 {
 		next_indent = 0
 	}
 
-	var recent_empty = false
-	var first_empty = parser.Newlines <= 1
+	recent_empty := false
+	first_empty := parser.Newlines <= 1
 
-	var line = parser.Mark.Line
-	var column = parser.Mark.Column
+	line := parser.Mark.Line
+	column := parser.Mark.Column
 
 	var text []byte
 
@@ -2954,7 +2932,7 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 	// still be considered as a foot of the prior content.
 	// If there's some content in the currently parsed line, then
 	// the foot is the line below it.
-	var foot_line = -1
+	foot_line := -1
 	if scan_mark.Line > 0 {
 		foot_line = parser.Mark.Line - parser.Newlines + 1
 		if parser.Newlines == 0 && parser.Mark.Column > 1 {
@@ -2962,21 +2940,24 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 		}
 	}
 
-	var peek = 0
+	peek := 0
 	for ; peek < 512; peek++ {
-		if parser.Unread < peek+1 && yaml_parser_update_buffer(parser, peek+1) != nil {
-			break
+		if parser.Unread < peek+1 {
+			err := yaml_parser_update_buffer(parser, peek+1)
+			if err != nil {
+				return err
+			}
 		}
 		column++
 		if yamlh.Is_blank(parser.Buffer, parser.Buffer_pos+peek) {
 			continue
 		}
 		c := parser.Buffer[parser.Buffer_pos+peek]
-		var close_flow = parser.Flow_level > 0 && (c == ']' || c == '}')
+		close_flow := parser.Flow_level > 0 && (c == ']' || c == '}')
 		if close_flow || yamlh.Is_breakz(parser.Buffer, parser.Buffer_pos+peek) {
 			// Got line break or terminator.
 			if close_flow || !recent_empty {
-				if close_flow || first_empty && (start_mark.Line == foot_line && token.Type != yamlh.VALUE_TOKEN || start_mark.Column-1 < next_indent) {
+				if close_flow || first_empty && (start_mark.Line == foot_line && token.Type != yamlh.VALUE_TOKEN || start_mark.Column <= next_indent) {
 					// This is the first empty line and there were no empty lines before,
 					// so this initial part of the comment is a foot of the prior token
 					// instead of being a head for the following one. Split it up.
@@ -2991,10 +2972,10 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 							Scan_mark:  scan_mark,
 							Token_mark: token_mark,
 							Start_mark: start_mark,
-							End_mark:   yamlh.Position{parser.Mark.Index + peek, line, column},
+							End_mark:   yamlh.Position{Index: parser.Mark.Index + peek, Line: line, Column: column},
 							Foot:       text,
 						})
-						scan_mark = yamlh.Position{parser.Mark.Index + peek, line, column}
+						scan_mark = yamlh.Position{Index: parser.Mark.Index + peek, Line: line, Column: column}
 						token_mark = scan_mark
 						text = nil
 					}
@@ -3014,17 +2995,17 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 			continue
 		}
 
-		if len(text) > 0 && (close_flow || column-1 < next_indent && column != start_mark.Column) {
+		if len(text) > 0 && (close_flow || column <= next_indent && column != start_mark.Column) {
 			// The comment at the different indentation is a foot of the
 			// preceding data rather than a head of the upcoming one.
 			parser.Comments = append(parser.Comments, yamlh.YamlComment{
 				Scan_mark:  scan_mark,
 				Token_mark: token_mark,
 				Start_mark: start_mark,
-				End_mark:   yamlh.Position{parser.Mark.Index + peek, line, column},
+				End_mark:   yamlh.Position{Index: parser.Mark.Index + peek, Line: line, Column: column},
 				Foot:       text,
 			})
-			scan_mark = yamlh.Position{parser.Mark.Index + peek, line, column}
+			scan_mark = yamlh.Position{Index: parser.Mark.Index + peek, Line: line, Column: column}
 			token_mark = scan_mark
 			text = nil
 		}
@@ -3034,7 +3015,7 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 		}
 
 		if len(text) == 0 {
-			start_mark = yamlh.Position{parser.Mark.Index + peek, line, column}
+			start_mark = yamlh.Position{Index: parser.Mark.Index + peek, Line: line, Column: column}
 		} else {
 			text = append(text, '\n')
 		}
@@ -3082,7 +3063,7 @@ func yaml_parser_scan_comments(parser *YamlParser, scan_mark yamlh.Position) err
 			Scan_mark:  scan_mark,
 			Token_mark: start_mark,
 			Start_mark: start_mark,
-			End_mark:   yamlh.Position{parser.Mark.Index + peek - 1, line, column},
+			End_mark:   yamlh.Position{Index: parser.Mark.Index + peek - 1, Line: line, Column: column},
 			Head:       text,
 		})
 	}
